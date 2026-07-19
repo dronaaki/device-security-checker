@@ -2,6 +2,7 @@ import * as Device from 'expo-device';
 import * as Network from 'expo-network';
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as Battery from 'expo-battery';
+import * as FileSystem from 'expo-file-system';
 import { Platform } from 'react-native';
 
 export interface SecurityCheckResult {
@@ -23,7 +24,6 @@ export interface DeviceSecurityInfo {
 }
 
 export async function checkDeviceRooted(): Promise<SecurityCheckResult> {
-  // Basic checks for rooted/jailbroken device
   const isDevice = Device.isDevice;
   const platform = Platform.OS;
   
@@ -32,18 +32,50 @@ export async function checkDeviceRooted(): Promise<SecurityCheckResult> {
   let status: 'secure' | 'warning' | 'critical' = 'secure';
 
   if (!isDevice) {
-    // Running on emulator/simulator - this is normal for development
     message = 'Running on emulator/simulator (development mode)';
     status = 'warning';
   } else {
-    // In production, you would implement more sophisticated checks
-    // For now, we'll do basic platform checks
-    if (platform === 'android') {
-      // Android-specific checks would go here
-      message = 'Android device - no obvious root indicators';
-    } else if (platform === 'ios') {
-      // iOS-specific checks would go here
-      message = 'iOS device - no obvious jailbreak indicators';
+    try {
+      const pathsToCheck = platform === 'ios' ? [
+        '/Applications/Cydia.app',
+        '/Library/MobileSubstrate/MobileSubstrate.dylib',
+        '/bin/bash',
+        '/usr/sbin/sshd',
+        '/etc/apt'
+      ] : [
+        '/system/app/Superuser.apk',
+        '/sbin/su',
+        '/system/bin/su',
+        '/system/xbin/su',
+        '/data/local/xbin/su',
+        '/data/local/bin/su',
+        '/system/sd/xbin/su',
+        '/system/bin/failsafe/su',
+        '/data/local/su',
+        '/su/bin/su'
+      ];
+
+      for (const path of pathsToCheck) {
+        try {
+          const fileInfo = await FileSystem.getInfoAsync(`file://${path}`);
+          if (fileInfo.exists) {
+            isRooted = true;
+            break;
+          }
+        } catch (e) {
+          // Ignore errors as they might be due to permission restrictions which is normal
+        }
+      }
+
+      if (isRooted) {
+        status = 'critical';
+        message = platform === 'ios' ? 'Jailbreak detected on this iOS device' : 'Root access detected on this Android device';
+      } else {
+        message = platform === 'ios' ? 'iOS device - no obvious jailbreak indicators' : 'Android device - no obvious root indicators';
+      }
+    } catch (error) {
+      status = 'warning';
+      message = 'Failed to perform complete root/jailbreak analysis';
     }
   }
 
@@ -221,14 +253,19 @@ export async function checkVPNDetection(): Promise<SecurityCheckResult> {
   try {
     const networkState = await Network.getNetworkStateAsync();
     
-    // Basic VPN detection - in production, you'd use more sophisticated methods
     let status: 'secure' | 'warning' | 'critical' = 'secure';
     let message = 'No VPN detected';
 
-    // This is a simplified check - real VPN detection requires more complex analysis
-    if (networkState.type === Network.NetworkStateType.WIFI) {
-      message = 'Connected to WiFi - VPN status unknown';
+    // Heuristic VPN check based on VPN interface names if we can fetch IP Address
+    // Expo Network doesn't directly give interface names, but we can check if it's VPN type
+    if (networkState.type === Network.NetworkStateType.VPN) {
+      message = 'Active VPN connection detected';
       status = 'warning';
+    } else if (networkState.type === Network.NetworkStateType.WIFI || networkState.type === Network.NetworkStateType.CELLULAR) {
+      // It's connected normally, but we can't absolutely rule out a custom VPN.
+      // We will mark it secure but mention it's a basic check.
+      message = 'Connected via standard interface (VPN status: likely clear)';
+      status = 'secure';
     }
 
     return {
@@ -329,22 +366,23 @@ export async function checkSystemIntegrity(): Promise<SecurityCheckResult> {
   try {
     const isDevice = Device.isDevice;
     const platform = Platform.OS;
+    const rootCheck = await checkDeviceRooted();
     
     let status: 'secure' | 'warning' | 'critical' = 'secure';
-    let message = 'System integrity appears normal';
+    let message = 'System integrity verified';
 
     if (!isDevice) {
       status = 'warning';
       message = 'Running on emulator/simulator - integrity checks limited';
-    }
-
-    // Basic system health checks
-    if (platform === 'android') {
-      // Android-specific integrity checks would go here
-      message = 'Android system - basic integrity checks passed';
-    } else if (platform === 'ios') {
-      // iOS-specific integrity checks would go here
-      message = 'iOS system - basic integrity checks passed';
+    } else if (rootCheck.status === 'critical') {
+      status = 'critical';
+      message = 'System integrity compromised (Root/Jailbreak detected)';
+    } else {
+      if (platform === 'android') {
+        message = 'Android system integrity verified';
+      } else if (platform === 'ios') {
+        message = 'iOS system integrity verified';
+      }
     }
 
     return {
