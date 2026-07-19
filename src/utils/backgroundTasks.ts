@@ -2,9 +2,10 @@ import * as TaskManager from 'expo-task-manager';
 import * as BackgroundFetch from 'expo-background-fetch';
 import { Platform } from 'react-native';
 import { runAllSecurityChecks } from './securityChecks';
+import { getSettings } from './settings';
+import { sendCriticalSecurityAlert, sendWarningSecurityAlert } from './notifications';
 
 const BACKGROUND_SECURITY_TASK = 'BACKGROUND_SECURITY_TASK';
-const TASK_INTERVAL = 15 * 60 * 1000; // 15 minutes in milliseconds
 
 export async function registerBackgroundTask() {
   if (Platform.OS === 'web') {
@@ -19,13 +20,25 @@ export async function registerBackgroundTask() {
         console.log('Running background security check...');
         const checks = await runAllSecurityChecks();
         
+        // Get settings for notification preferences
+        const settings = await getSettings();
+        
         // Check for critical issues
         const criticalIssues = checks.filter(check => check.status === 'critical');
+        const warningIssues = checks.filter(check => check.status === 'warning');
         
-        if (criticalIssues.length > 0) {
+        if (settings.notificationsEnabled && settings.criticalAlertsEnabled && criticalIssues.length > 0) {
           console.warn('Critical security issues detected:', criticalIssues);
-          // Here you would trigger a notification
-          // This would be handled by the notification system
+          for (const issue of criticalIssues) {
+            await sendCriticalSecurityAlert(issue.name);
+          }
+        }
+        
+        if (settings.notificationsEnabled && settings.warningAlertsEnabled && warningIssues.length > 0) {
+          console.warn('Warning security issues detected:', warningIssues);
+          for (const issue of warningIssues) {
+            await sendWarningSecurityAlert(issue.name);
+          }
         }
         
         return BackgroundFetch.BackgroundFetchResult.NewData;
@@ -35,11 +48,12 @@ export async function registerBackgroundTask() {
       }
     });
 
-    // Register the task
+    // Register the task with settings-based interval
+    const settings = await getSettings();
     const status = await BackgroundFetch.getStatusAsync();
     if (status === BackgroundFetch.Status.Available) {
       await BackgroundFetch.registerTaskAsync(BACKGROUND_SECURITY_TASK, {
-        minimumInterval: TASK_INTERVAL,
+        minimumInterval: settings.checkFrequency * 60 * 1000,
         stopOnTerminate: false,
         startOnBoot: true,
       });

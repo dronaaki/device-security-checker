@@ -8,11 +8,17 @@ import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { runAllSecurityChecks, getDeviceSecurityInfo, SecurityCheckResult, DeviceSecurityInfo } from '@/utils/securityChecks';
 import { registerBackgroundTask } from '@/utils/backgroundTasks';
 import { requestNotificationPermissions } from '@/utils/notifications';
+import { saveSecurityLog, getRecentLogs, SecurityLog } from '@/utils/securityLogs';
+import { getRecommendations } from '@/utils/recommendations';
+import { generateVulnerabilityReport } from '@/utils/vulnerabilityReport';
+import { getSettings } from '@/utils/settings';
 
 export default function SecurityDashboard() {
   const [securityChecks, setSecurityChecks] = useState<SecurityCheckResult[]>([]);
   const [deviceInfo, setDeviceInfo] = useState<DeviceSecurityInfo | null>(null);
   const [loading, setLoading] = useState(true);
+  const [recentLogs, setRecentLogs] = useState<SecurityLog[]>([]);
+  const [showRecommendations, setShowRecommendations] = useState(false);
 
   const loadSecurityData = async () => {
     setLoading(true);
@@ -23,6 +29,22 @@ export default function SecurityDashboard() {
       ]);
       setSecurityChecks(checks);
       setDeviceInfo(info);
+
+      // Save security log
+      const overallStatus = getOverallStatus();
+      const logStatus: 'secure' | 'warning' | 'critical' = 
+        overallStatus === 'unknown' ? 'secure' : overallStatus;
+      await saveSecurityLog({
+        id: `log-${Date.now()}`,
+        timestamp: new Date(),
+        overallStatus: logStatus,
+        checks,
+        deviceInfo: {
+          deviceName: info.deviceName,
+          deviceModel: info.deviceModel,
+          osVersion: info.osVersion,
+        },
+      });
     } catch (error) {
       console.error('Error loading security data:', error);
     } finally {
@@ -33,7 +55,13 @@ export default function SecurityDashboard() {
   useEffect(() => {
     loadSecurityData();
     initializeBackgroundServices();
+    loadRecentLogs();
   }, []);
+
+  const loadRecentLogs = async () => {
+    const logs = await getRecentLogs(5);
+    setRecentLogs(logs);
+  };
 
   const initializeBackgroundServices = async () => {
     try {
@@ -149,6 +177,51 @@ export default function SecurityDashboard() {
                   Refresh Security Checks
                 </ThemedText>
               </ThemedView>
+
+              {/* Recent Logs */}
+              {recentLogs.length > 0 && (
+                <ThemedView type="backgroundElement" style={styles.card}>
+                  <ThemedText type="subtitle">Recent Security Checks</ThemedText>
+                  {recentLogs.map((log) => (
+                    <ThemedView key={log.id} style={styles.logItem}>
+                      <ThemedView style={styles.logHeader}>
+                        <ThemedText type="small">{log.timestamp.toLocaleString()}</ThemedText>
+                        <View style={[styles.statusDot, { backgroundColor: getStatusColor(log.overallStatus) }]} />
+                      </ThemedView>
+                      <ThemedText type="small" style={styles.logStatus}>
+                        Status: {log.overallStatus.toUpperCase()}
+                      </ThemedText>
+                    </ThemedView>
+                  ))}
+                </ThemedView>
+              )}
+
+              {/* Recommendations Toggle */}
+              <ThemedView type="backgroundElement" style={[styles.card, styles.refreshCard]}>
+                <ThemedText type="default" onPress={() => setShowRecommendations(!showRecommendations)} style={styles.refreshButton}>
+                  {showRecommendations ? 'Hide' : 'Show'} Security Recommendations
+                </ThemedText>
+              </ThemedView>
+
+              {/* Recommendations */}
+              {showRecommendations && (
+                <ThemedView type="backgroundElement" style={styles.card}>
+                  <ThemedText type="subtitle">Security Recommendations</ThemedText>
+                  {getRecommendations(securityChecks).slice(0, 5).map((rec) => (
+                    <ThemedView key={rec.id} style={styles.recItem}>
+                      <ThemedText type="default" style={styles.recTitle}>
+                        {rec.title}
+                      </ThemedText>
+                      <ThemedText type="small" style={styles.recDescription}>
+                        {rec.description}
+                      </ThemedText>
+                      <ThemedText type="small" style={styles.recPriority}>
+                        Priority: {rec.priority.toUpperCase()}
+                      </ThemedText>
+                    </ThemedView>
+                  ))}
+                </ThemedView>
+              )}
             </>
           )}
         </ScrollView>
@@ -239,5 +312,38 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#007AFF',
+  },
+  logItem: {
+    marginTop: Spacing.three,
+    paddingTop: Spacing.three,
+    borderTopWidth: 1,
+    borderTopColor: '#E0E0E0',
+  },
+  logHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  logStatus: {
+    marginTop: Spacing.one,
+    opacity: 0.8,
+  },
+  recItem: {
+    marginTop: Spacing.three,
+    paddingTop: Spacing.three,
+    borderTopWidth: 1,
+    borderTopColor: '#E0E0E0',
+  },
+  recTitle: {
+    fontWeight: '600',
+  },
+  recDescription: {
+    marginTop: Spacing.one,
+    opacity: 0.8,
+  },
+  recPriority: {
+    marginTop: Spacing.one,
+    opacity: 0.6,
+    fontSize: 12,
   },
 });
