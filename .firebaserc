@@ -1,5 +1,7 @@
 {
   "projects": {
     "default": "device-sec-checker-2026"
-  }
+  },
+  "targets": {},
+  "etags": {}
 }

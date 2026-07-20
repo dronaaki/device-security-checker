@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { StyleSheet, View, TextInput, TouchableOpacity, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -28,9 +28,24 @@ export default function LoginScreen() {
       } else {
         await createUserWithEmailAndPassword(auth, email, password);
       }
-      // On success, _layout will automatically detect the user and render AppTabs
     } catch (error: any) {
       Alert.alert('Authentication Error', error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleAuth = async () => {
+    setLoading(true);
+    try {
+      if (Platform.OS === 'web') {
+        const provider = new GoogleAuthProvider();
+        await signInWithPopup(auth, provider);
+      } else {
+        Alert.alert('Notice', 'Google Sign-In on iOS/Android requires native Expo AuthSession setup, which is not yet configured. Please test on Web or use Email/Password.');
+      }
+    } catch (error: any) {
+      Alert.alert('Google Auth Error', error.message);
     } finally {
       setLoading(false);
     }
@@ -55,6 +70,23 @@ export default function LoginScreen() {
             </View>
 
             <View style={styles.form}>
+              <TouchableOpacity 
+                style={styles.googleButton} 
+                onPress={handleGoogleAuth}
+                disabled={loading}
+              >
+                <SymbolView name="g.circle.fill" size={24} tintColor="#fff" />
+                <ThemedText style={styles.googleButtonText}>
+                  Continue with Google
+                </ThemedText>
+              </TouchableOpacity>
+
+              <View style={styles.divider}>
+                <View style={styles.line} />
+                <ThemedText style={styles.dividerText}>or</ThemedText>
+                <View style={styles.line} />
+              </View>
+
               <View style={styles.inputContainer}>
                 <ThemedText type="smallBold" style={styles.label}>Email Address</ThemedText>
                 <TextInput
@@ -140,19 +172,48 @@ const styles = StyleSheet.create({
     borderRadius: Spacing.three,
     padding: Spacing.four,
     fontSize: 16,
-    color: '#111827', // dark gray for contrast
+    color: '#111827',
   },
   button: {
     backgroundColor: '#3B82F6',
     borderRadius: Spacing.three,
     padding: Spacing.four,
     alignItems: 'center',
-    marginTop: Spacing.four,
+    marginTop: Spacing.two,
   },
   buttonText: {
     color: 'white',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  googleButton: {
+    backgroundColor: '#DB4437',
+    borderRadius: Spacing.three,
+    padding: Spacing.four,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: Spacing.four,
+  },
+  googleButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginLeft: Spacing.two,
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Spacing.four,
+  },
+  line: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#E5E7EB',
+  },
+  dividerText: {
+    marginHorizontal: Spacing.three,
+    opacity: 0.5,
   },
   toggleButton: {
     marginTop: Spacing.five,

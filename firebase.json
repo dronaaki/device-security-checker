@@ -12,5 +12,13 @@
         "destination": "/index.html"
       }
     ]
+  },
+  "auth": {
+    "providers": {
+      "googleSignIn": {
+        "oAuthBrandDisplayName": "Device Security Checker",
+        "supportEmail": "rayikwei@hptmail.com"
+      }
+    }
   }
 }
