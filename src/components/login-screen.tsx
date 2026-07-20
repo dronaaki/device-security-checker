@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, TextInput, TouchableOpacity, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { StyleSheet, View, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithRedirect, GoogleAuthProvider } from 'firebase/auth';
+import { signInWithEmailAndPassword, signInWithRedirect, GoogleAuthProvider } from 'firebase/auth';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -9,11 +9,35 @@ import { Spacing } from '@/constants/theme';
 import { auth } from '@/utils/firebaseConfig';
 import { SymbolView } from 'expo-symbols';
 
+// Account creation is disabled project-side ("user actions" in Firebase Auth
+// settings), so any attempt to register — including a first-time Google user —
+// comes back as auth/admin-restricted-operation.
+function describeAuthError(error: { code?: string; message?: string }): string {
+  switch (error.code) {
+    case 'auth/admin-restricted-operation':
+      return 'This app is not accepting new accounts. Contact the owner to have one created for you.';
+    case 'auth/invalid-credential':
+    case 'auth/wrong-password':
+    case 'auth/user-not-found':
+      return 'Incorrect email or password.';
+    case 'auth/invalid-email':
+      return 'That email address is not valid.';
+    case 'auth/user-disabled':
+      return 'This account has been disabled.';
+    case 'auth/too-many-requests':
+      return 'Too many attempts. Please wait a moment and try again.';
+    case 'auth/network-request-failed':
+      return 'Network error. Check your connection and try again.';
+    default:
+      return error.message ?? 'Something went wrong. Please try again.';
+  }
+}
+
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   const handleAuth = async () => {
     if (!email || !password) {
@@ -24,39 +48,26 @@ export default function LoginScreen() {
     setErrorMessage('');
     setLoading(true);
     try {
-      console.log('Starting Email Auth process...');
-      if (isLogin) {
-        await signInWithEmailAndPassword(auth, email, password);
-      } else {
-        await createUserWithEmailAndPassword(auth, email, password);
-      }
-      console.log('Email Auth successful!');
+      await signInWithEmailAndPassword(auth, email, password);
     } catch (error: any) {
       console.error('Authentication Error:', error);
-      setErrorMessage(`Auth Error: ${error.message}`);
+      setErrorMessage(describeAuthError(error));
     } finally {
       setLoading(false);
     }
   };
 
-  const [errorMessage, setErrorMessage] = useState('');
-
   const handleGoogleAuth = async () => {
-    console.log('Google Auth button clicked!');
     setErrorMessage('');
     try {
       if (Platform.OS === 'web') {
-        console.log('Initializing GoogleAuthProvider...');
-        const provider = new GoogleAuthProvider();
-        console.log('Calling signInWithRedirect...');
-        await signInWithRedirect(auth, provider);
-        console.log('signInWithRedirect call completed.');
+        await signInWithRedirect(auth, new GoogleAuthProvider());
       } else {
-        setErrorMessage('Google Sign-In on iOS/Android requires native Expo AuthSession setup, which is not yet configured. Please test on Web or use Email/Password.');
+        setErrorMessage('Google Sign-In on iOS/Android requires native Expo AuthSession setup, which is not yet configured. Please use Email/Password.');
       }
     } catch (error: any) {
       console.error('Google Auth Error:', error);
-      setErrorMessage(`Error: ${error.message} (${error.code})`);
+      setErrorMessage(describeAuthError(error));
     }
   };
 
@@ -71,7 +82,7 @@ export default function LoginScreen() {
             <View style={styles.header}>
               <SymbolView name="lock.shield.fill" size={64} tintColor="#3B82F6" />
               <ThemedText type="title" style={styles.title}>
-                {isLogin ? 'Welcome Back' : 'Create Account'}
+                Welcome Back
               </ThemedText>
               <ThemedText style={styles.subtitle}>
                 Secure access to your device dashboard
@@ -127,16 +138,14 @@ export default function LoginScreen() {
                 disabled={loading}
               >
                 <ThemedText style={styles.buttonText}>
-                  {loading ? 'Processing...' : (isLogin ? 'Sign In' : 'Sign Up')}
+                  {loading ? 'Processing...' : 'Sign In'}
                 </ThemedText>
               </TouchableOpacity>
 
-              <TouchableOpacity style={styles.toggleButton} onPress={() => setIsLogin(!isLogin)}>
-                <ThemedText style={styles.toggleText}>
-                  {isLogin ? "Don't have an account? Sign Up" : "Already have an account? Sign In"}
-                </ThemedText>
-              </TouchableOpacity>
-              
+              <ThemedText style={styles.noAccountText}>
+                Don't have an account? Contact the owner to have one created for you.
+              </ThemedText>
+
               {errorMessage ? (
                 <View style={styles.errorContainer}>
                   <ThemedText style={styles.errorText}>{errorMessage}</ThemedText>
@@ -230,13 +239,11 @@ const styles = StyleSheet.create({
     marginHorizontal: Spacing.three,
     opacity: 0.5,
   },
-  toggleButton: {
+  noAccountText: {
     marginTop: Spacing.five,
-    alignItems: 'center',
-  },
-  toggleText: {
-    color: '#3B82F6',
-    fontWeight: '600',
+    textAlign: 'center',
+    opacity: 0.6,
+    fontSize: 13,
   },
   errorContainer: {
     marginTop: Spacing.four,
