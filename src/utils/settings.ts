@@ -1,4 +1,4 @@
-import * as SecureStore from 'expo-secure-store';
+import * as storage from './storage';
 
 const SETTINGS_KEY = 'app_settings';
 
@@ -22,7 +22,7 @@ const DEFAULT_SETTINGS: AppSettings = {
 
 export async function getSettings(): Promise<AppSettings> {
   try {
-    const settingsJson = await SecureStore.getItemAsync(SETTINGS_KEY);
+    const settingsJson = await storage.getItem(SETTINGS_KEY);
     if (!settingsJson) return DEFAULT_SETTINGS;
     
     const settings = JSON.parse(settingsJson);
@@ -36,7 +36,7 @@ export async function getSettings(): Promise<AppSettings> {
 export async function saveSettings(settings: AppSettings): Promise<void> {
   try {
     const settingsJson = JSON.stringify(settings);
-    await SecureStore.setItemAsync(SETTINGS_KEY, settingsJson);
+    await storage.setItem(SETTINGS_KEY, settingsJson);
   } catch (error) {
     console.error('Error saving settings:', error);
   }

@@ -1,4 +1,4 @@
-import * as SecureStore from 'expo-secure-store';
+import * as storage from './storage';
 import { SecurityCheckResult } from './securityChecks';
 
 const LOGS_KEY = 'security_logs';
@@ -30,7 +30,7 @@ export async function saveSecurityLog(log: SecurityLog): Promise<void> {
       })),
     })));
     
-    await SecureStore.setItemAsync(LOGS_KEY, logsJson);
+    await storage.setItem(LOGS_KEY, logsJson);
   } catch (error) {
     console.error('Error saving security log:', error);
   }
@@ -38,7 +38,7 @@ export async function saveSecurityLog(log: SecurityLog): Promise<void> {
 
 export async function getSecurityLogs(): Promise<SecurityLog[]> {
   try {
-    const logsJson = await SecureStore.getItemAsync(LOGS_KEY);
+    const logsJson = await storage.getItem(LOGS_KEY);
     if (!logsJson) return [];
     
     const logs = JSON.parse(logsJson);
@@ -58,7 +58,7 @@ export async function getSecurityLogs(): Promise<SecurityLog[]> {
 
 export async function clearSecurityLogs(): Promise<void> {
   try {
-    await SecureStore.deleteItemAsync(LOGS_KEY);
+    await storage.deleteItem(LOGS_KEY);
   } catch (error) {
     console.error('Error clearing security logs:', error);
   }

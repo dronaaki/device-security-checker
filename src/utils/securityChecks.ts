@@ -145,6 +145,18 @@ export async function checkNetworkSecurity(): Promise<SecurityCheckResult> {
 export async function checkOSVersion(): Promise<SecurityCheckResult> {
   const osVersion = Device.osVersion ?? '';
   const platform = Platform.OS;
+
+  if (platform === 'web') {
+    // Device.osVersion in a browser reports the host OS with no patch level,
+    // which isn't enough to judge whether security updates are applied.
+    return {
+      id: 'os-version-check',
+      name: 'OS Version',
+      status: 'info',
+      message: 'OS patch level cannot be determined from a browser.',
+      timestamp: new Date(),
+    };
+  }
   
   let status: 'secure' | 'warning' | 'critical' = 'secure';
   let message = `Running ${platform} ${osVersion}`;
