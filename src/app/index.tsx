@@ -12,6 +12,7 @@ import { registerBackgroundTask } from '@/utils/backgroundTasks';
 import { requestNotificationPermissions } from '@/utils/notifications';
 import { saveSecurityLog, getRecentLogs, SecurityLog } from '@/utils/securityLogs';
 import { getRecommendations } from '@/utils/recommendations';
+import { getAIRecommendations, AIRecommendation } from '@/utils/ai/securityAdvisor';
 
 export default function SecurityDashboard() {
   const [securityChecks, setSecurityChecks] = useState<SecurityCheckResult[]>([]);
@@ -20,7 +21,23 @@ export default function SecurityDashboard() {
   const [recentLogs, setRecentLogs] = useState<SecurityLog[]>([]);
   const [showRecommendations, setShowRecommendations] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [aiRecommendations, setAiRecommendations] = useState<AIRecommendation[]>([]);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
   const theme = useTheme();
+
+  const loadAIAnalysis = async () => {
+    setAiLoading(true);
+    setAiError(null);
+    try {
+      setAiRecommendations(await getAIRecommendations(securityChecks));
+    } catch (error: any) {
+      console.error('AI analysis failed:', error);
+      setAiError(error?.message ?? 'Could not reach the AI provider.');
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   const loadSecurityData = async () => {
     try {
@@ -188,8 +205,41 @@ export default function SecurityDashboard() {
                 ))}
               </View>
 
+              {/* AI Analysis */}
+              <TouchableOpacity
+                style={[styles.actionButton, styles.aiButton]}
+                onPress={loadAIAnalysis}
+                disabled={aiLoading}
+                activeOpacity={0.8}
+              >
+                <ThemedText style={styles.actionButtonText}>
+                  {aiLoading ? 'Analyzing...' : 'Explain My Results (AI)'}
+                </ThemedText>
+              </TouchableOpacity>
+
+              {aiError && (
+                <ThemedView type="backgroundElement" style={[styles.recCard, styles.aiErrorCard]}>
+                  <ThemedText type="smallBold">AI analysis unavailable</ThemedText>
+                  <ThemedText type="small" style={styles.recDesc}>{aiError}</ThemedText>
+                </ThemedView>
+              )}
+
+              {aiRecommendations.length > 0 && (
+                <View style={styles.recommendationsContainer}>
+                  {aiRecommendations.map((rec) => (
+                    <ThemedView key={rec.id} type="backgroundElement" style={styles.recCard}>
+                      <ThemedText type="smallBold">{rec.title}</ThemedText>
+                      <ThemedText type="small" style={styles.recDesc}>{rec.detail}</ThemedText>
+                      <ThemedText type="small" style={styles.recPriority}>
+                        {rec.priority.toUpperCase()} PRIORITY
+                      </ThemedText>
+                    </ThemedView>
+                  ))}
+                </View>
+              )}
+
               {/* Recommendations Toggle */}
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.actionButton} 
                 onPress={() => setShowRecommendations(!showRecommendations)}
                 activeOpacity={0.8}
@@ -335,5 +385,18 @@ const styles = StyleSheet.create({
   recDesc: {
     marginTop: Spacing.one,
     opacity: 0.8,
+  },
+  aiButton: {
+    backgroundColor: '#7C3AED',
+  },
+  aiErrorCard: {
+    borderLeftColor: '#EF4444',
+    marginBottom: Spacing.four,
+  },
+  recPriority: {
+    marginTop: Spacing.two,
+    opacity: 0.6,
+    fontSize: 11,
+    fontWeight: '700',
   },
 });
