@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "dependencies": {
     "@expo/ui": "~57.0.7",
+    "@react-native-async-storage/async-storage": "^3.1.1",
     "expo": "~57.0.7",
     "expo-background-fetch": "^57.0.5",
     "expo-battery": "^57.0.1",
@@ -25,6 +26,7 @@
     "expo-system-ui": "~57.0.1",
     "expo-task-manager": "^57.0.5",
     "expo-web-browser": "~57.0.1",
+    "firebase": "^12.16.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.0",
