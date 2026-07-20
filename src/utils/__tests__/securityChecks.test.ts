@@ -1,13 +1,15 @@
 import { checkDeviceRooted, checkVPNDetection } from '../securityChecks';
 import * as Device from 'expo-device';
 import * as Network from 'expo-network';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { Platform } from 'react-native';
 
 // Mock dependencies
 jest.mock('expo-device');
 jest.mock('expo-network');
-jest.mock('expo-file-system');
+jest.mock('expo-file-system/legacy', () => ({
+  getInfoAsync: jest.fn(),
+}));
 jest.mock('react-native/Libraries/Utilities/Platform', () => {
   const Platform = jest.requireActual('react-native/Libraries/Utilities/Platform');
   return {

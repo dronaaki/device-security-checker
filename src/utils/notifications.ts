@@ -1,17 +1,24 @@
-import * as Notifications from 'expo-notifications';
+import type * as NotificationsTypes from 'expo-notifications';
 import { Platform } from 'react-native';
 
-// Configure notification behavior
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
+// Load expo-notifications only on native: merely evaluating the module on web
+// registers push-token listeners and logs "not yet fully supported" warnings.
+const Notifications: typeof NotificationsTypes | null =
+  Platform.OS === 'web' ? null : require('expo-notifications');
+
+if (Notifications) {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+    }),
+  });
+}
 
 export async function requestNotificationPermissions() {
-  if (Platform.OS === 'web') {
+  if (!Notifications) {
     console.log('Notifications not supported on web');
     return false;
   }
@@ -39,7 +46,7 @@ export async function requestNotificationPermissions() {
 }
 
 export async function sendSecurityAlert(title: string, body: string) {
-  if (Platform.OS === 'web') {
+  if (!Notifications) {
     console.log('Security alert (web):', title, '-', body);
     return;
   }
@@ -74,7 +81,7 @@ export async function sendWarningSecurityAlert(issue: string) {
 }
 
 export async function scheduleRegularSecurityCheck(intervalMinutes: number = 60) {
-  if (Platform.OS === 'web') {
+  if (!Notifications) {
     console.log('Scheduled notifications not supported on web');
     return;
   }
@@ -91,6 +98,7 @@ export async function scheduleRegularSecurityCheck(intervalMinutes: number = 60)
         data: { type: 'security_reminder' },
       },
       trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
         seconds: intervalMinutes * 60,
         repeats: true,
       },

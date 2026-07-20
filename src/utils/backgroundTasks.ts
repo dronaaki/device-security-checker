@@ -51,9 +51,9 @@ export async function registerBackgroundTask() {
     // Register the task with settings-based interval
     const settings = await getSettings();
     const status = await BackgroundFetch.getStatusAsync();
-    if (status === BackgroundFetch.Status.Available) {
+    if (status === BackgroundFetch.BackgroundFetchStatus.Available) {
       await BackgroundFetch.registerTaskAsync(BACKGROUND_SECURITY_TASK, {
-        minimumInterval: settings.checkFrequency * 60 * 1000,
+        minimumInterval: settings.checkFrequency * 60, // expects seconds
         stopOnTerminate: false,
         startOnBoot: true,
       });

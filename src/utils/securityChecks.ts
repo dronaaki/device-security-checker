@@ -2,13 +2,17 @@ import * as Device from 'expo-device';
 import * as Network from 'expo-network';
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as Battery from 'expo-battery';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { Platform } from 'react-native';
+
+// 'info' marks checks that cannot be verified on this platform; they are
+// excluded from the overall secure/warning/critical rating.
+export type SecurityCheckStatus = 'secure' | 'warning' | 'critical' | 'info';
 
 export interface SecurityCheckResult {
   id: string;
   name: string;
-  status: 'secure' | 'warning' | 'critical';
+  status: SecurityCheckStatus;
   message: string;
   timestamp: Date;
 }
@@ -26,10 +30,20 @@ export interface DeviceSecurityInfo {
 export async function checkDeviceRooted(): Promise<SecurityCheckResult> {
   const isDevice = Device.isDevice;
   const platform = Platform.OS;
-  
+
+  if (platform === 'web') {
+    return {
+      id: 'root-check',
+      name: 'Root/Jailbreak Detection',
+      status: 'info',
+      message: 'Root/jailbreak detection is not applicable in a browser.',
+      timestamp: new Date(),
+    };
+  }
+
   let isRooted = false;
   let message = 'Device appears secure';
-  let status: 'secure' | 'warning' | 'critical' = 'secure';
+  let status: SecurityCheckStatus = 'secure';
 
   if (!isDevice) {
     message = 'Running on emulator/simulator (development mode)';
@@ -92,8 +106,8 @@ export async function checkNetworkSecurity(): Promise<SecurityCheckResult> {
   try {
     const networkState = await Network.getNetworkStateAsync();
     const ip = await Network.getIpAddressAsync();
-    
-    let status: 'secure' | 'warning' | 'critical' = 'secure';
+
+    let status: SecurityCheckStatus = 'secure';
     let message = 'Network connection secure';
 
     if (networkState.type === Network.NetworkStateType.WIFI) {
@@ -101,6 +115,10 @@ export async function checkNetworkSecurity(): Promise<SecurityCheckResult> {
     } else if (networkState.type === Network.NetworkStateType.CELLULAR) {
       message = `Connected to cellular network (IP: ${ip})`;
       status = 'warning'; // Cellular networks can be less secure
+    } else if (networkState.isConnected) {
+      // Browsers don't expose the connection type, so web always lands here
+      message = `Connected (connection type not exposed on this platform)`;
+      status = 'secure';
     } else {
       message = 'No network connection';
       status = 'warning';
@@ -125,7 +143,7 @@ export async function checkNetworkSecurity(): Promise<SecurityCheckResult> {
 }
 
 export async function checkOSVersion(): Promise<SecurityCheckResult> {
-  const osVersion = Device.osVersion;
+  const osVersion = Device.osVersion ?? '';
   const platform = Platform.OS;
   
   let status: 'secure' | 'warning' | 'critical' = 'secure';
@@ -170,7 +188,7 @@ export async function getDeviceSecurityInfo(): Promise<DeviceSecurityInfo> {
     deviceModel: Device.modelName || 'Unknown Model',
     osVersion: Device.osVersion || 'Unknown',
     isRooted: false, // Would be determined by actual root check
-    networkType: networkState.type,
+    networkType: networkState.type ?? 'UNKNOWN',
     ipAddress: ip,
     lastCheck: new Date(),
   };
@@ -178,6 +196,16 @@ export async function getDeviceSecurityInfo(): Promise<DeviceSecurityInfo> {
 
 export async function checkBiometricSecurity(): Promise<SecurityCheckResult> {
   try {
+    if (Platform.OS === 'web') {
+      return {
+        id: 'biometric-check',
+        name: 'Biometric Security',
+        status: 'info',
+        message: 'Biometric status cannot be read from a browser.',
+        timestamp: new Date(),
+      };
+    }
+
     const isCompatible = await LocalAuthentication.hasHardwareAsync();
     const isEnrolled = await LocalAuthentication.isEnrolledAsync();
     
@@ -291,8 +319,8 @@ export async function checkDataEncryption(): Promise<SecurityCheckResult> {
     // Check if device has encryption enabled
     // This is a simplified check - real encryption status requires platform-specific APIs
     const platform = Platform.OS;
-    let status: 'secure' | 'warning' | 'critical' = 'secure';
-    let message = 'Device encryption status unknown';
+    let status: SecurityCheckStatus = 'info';
+    let message = 'Device encryption status cannot be determined on this platform';
 
     if (platform === 'ios') {
       // iOS devices are encrypted by default since iOS 8
@@ -300,7 +328,7 @@ export async function checkDataEncryption(): Promise<SecurityCheckResult> {
       message = 'iOS device encryption enabled by default';
     } else if (platform === 'android') {
       // Android encryption depends on device and OS version
-      const osVersion = Device.osVersion;
+      const osVersion = Device.osVersion ?? '';
       const [major] = osVersion.split('.').map(Number);
       if (major >= 10) {
         status = 'secure';
@@ -331,9 +359,19 @@ export async function checkDataEncryption(): Promise<SecurityCheckResult> {
 
 export async function checkScreenLockSecurity(): Promise<SecurityCheckResult> {
   try {
+    if (Platform.OS === 'web') {
+      return {
+        id: 'screenlock-check',
+        name: 'Screen Lock Security',
+        status: 'info',
+        message: 'Screen lock status cannot be read from a browser.',
+        timestamp: new Date(),
+      };
+    }
+
     const isEnrolled = await LocalAuthentication.isEnrolledAsync();
-    
-    let status: 'secure' | 'warning' | 'critical' = 'warning';
+
+    let status: SecurityCheckStatus = 'warning';
     let message = 'Screen lock security unknown';
 
     if (isEnrolled) {
@@ -366,9 +404,20 @@ export async function checkSystemIntegrity(): Promise<SecurityCheckResult> {
   try {
     const isDevice = Device.isDevice;
     const platform = Platform.OS;
+
+    if (platform === 'web') {
+      return {
+        id: 'integrity-check',
+        name: 'System Integrity',
+        status: 'info',
+        message: 'System integrity checks are not applicable in a browser.',
+        timestamp: new Date(),
+      };
+    }
+
     const rootCheck = await checkDeviceRooted();
-    
-    let status: 'secure' | 'warning' | 'critical' = 'secure';
+
+    let status: SecurityCheckStatus = 'secure';
     let message = 'System integrity verified';
 
     if (!isDevice) {
@@ -405,26 +454,13 @@ export async function checkSystemIntegrity(): Promise<SecurityCheckResult> {
 
 export async function checkAppPermissions(): Promise<SecurityCheckResult> {
   try {
-    // This is a simplified check - real permission analysis requires platform-specific APIs
-    const platform = Platform.OS;
-    
-    let status: 'secure' | 'warning' | 'critical' = 'secure';
-    let message = 'App permissions appear normal';
-
-    // In production, you would check for suspicious permission patterns
-    if (platform === 'android') {
-      message = 'Android app permissions - review recommended';
-      status = 'warning';
-    } else if (platform === 'ios') {
-      message = 'iOS app permissions - review recommended';
-      status = 'warning';
-    }
-
+    // Mobile OSes don't let one app enumerate other apps' permissions, so
+    // this check is informational rather than a pass/fail result.
     return {
       id: 'permissions-check',
       name: 'App Permissions',
-      status,
-      message,
+      status: 'info',
+      message: 'Automatic permission auditing is not available on this platform. Review app permissions periodically in system settings.',
       timestamp: new Date(),
     };
   } catch (error) {
@@ -440,28 +476,14 @@ export async function checkAppPermissions(): Promise<SecurityCheckResult> {
 
 export async function checkSuspiciousApps(): Promise<SecurityCheckResult> {
   try {
-    // This is a simplified check - real suspicious app detection requires:
-    // - App signature verification
-    // - Known malware database comparison
-    // - Behavioral analysis
-    let status: 'secure' | 'warning' | 'critical' = 'secure';
-    let message = 'No suspicious apps detected';
-
-    // In production, implement actual app scanning
-    const platform = Platform.OS;
-    if (platform === 'android') {
-      message = 'Android app scan - basic check completed';
-      status = 'warning';
-    } else if (platform === 'ios') {
-      message = 'iOS app scan - basic check completed';
-      status = 'warning';
-    }
-
+    // Real malware scanning needs signature verification and a threat
+    // database, neither of which is possible from a sandboxed app, so this
+    // check is informational rather than a pass/fail result.
     return {
       id: 'suspicious-apps-check',
       name: 'Suspicious App Detection',
-      status,
-      message,
+      status: 'info',
+      message: 'App scanning requires system-level access this app does not have. Only install apps from official stores.',
       timestamp: new Date(),
     };
   } catch (error) {

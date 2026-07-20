@@ -87,6 +87,7 @@ export default function SecurityDashboard() {
       case 'secure': return '#10B981'; // vibrant green
       case 'warning': return '#F59E0B'; // amber
       case 'critical': return '#EF4444'; // vibrant red
+      case 'info': return '#3B82F6'; // blue
       default: return '#6B7280'; // gray
     }
   };
@@ -96,6 +97,7 @@ export default function SecurityDashboard() {
       case 'secure': return 'checkmark.shield.fill';
       case 'warning': return 'exclamationmark.triangle.fill';
       case 'critical': return 'xmark.shield.fill';
+      case 'info': return 'info.circle.fill';
       default: return 'shield';
     }
   };
@@ -252,10 +254,7 @@ const styles = StyleSheet.create({
     padding: Spacing.five,
     borderRadius: Spacing.four,
     marginBottom: Spacing.four,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
+    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
     elevation: 5,
   },
   heroContent: {

@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "dependencies": {
     "@expo/ui": "~57.0.7",
-    "@react-native-async-storage/async-storage": "^3.1.1",
+    "@react-native-async-storage/async-storage": "2.2.0",
     "expo": "~57.0.7",
     "expo-background-fetch": "^57.0.5",
     "expo-battery": "^57.0.1",
@@ -39,7 +39,7 @@
   },
   "devDependencies": {
     "@testing-library/react-native": "^14.0.1",
-    "@types/jest": "^30.0.0",
+    "@types/jest": "29.5.14",
     "@types/react": "~19.2.2",
     "jest": "^29.7.0",
     "jest-expo": "^57.0.2",
