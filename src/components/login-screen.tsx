@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { StyleSheet, View, TextInput, TouchableOpacity, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithRedirect, GoogleAuthProvider } from 'firebase/auth';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -17,37 +17,46 @@ export default function LoginScreen() {
 
   const handleAuth = async () => {
     if (!email || !password) {
-      Alert.alert('Error', 'Please enter email and password.');
+      setErrorMessage('Please enter email and password.');
       return;
     }
 
+    setErrorMessage('');
     setLoading(true);
     try {
+      console.log('Starting Email Auth process...');
       if (isLogin) {
         await signInWithEmailAndPassword(auth, email, password);
       } else {
         await createUserWithEmailAndPassword(auth, email, password);
       }
+      console.log('Email Auth successful!');
     } catch (error: any) {
-      Alert.alert('Authentication Error', error.message);
+      console.error('Authentication Error:', error);
+      setErrorMessage(`Auth Error: ${error.message}`);
     } finally {
       setLoading(false);
     }
   };
 
+  const [errorMessage, setErrorMessage] = useState('');
+
   const handleGoogleAuth = async () => {
-    setLoading(true);
+    console.log('Google Auth button clicked!');
+    setErrorMessage('');
     try {
       if (Platform.OS === 'web') {
+        console.log('Initializing GoogleAuthProvider...');
         const provider = new GoogleAuthProvider();
-        await signInWithPopup(auth, provider);
+        console.log('Calling signInWithRedirect...');
+        await signInWithRedirect(auth, provider);
+        console.log('signInWithRedirect call completed.');
       } else {
-        Alert.alert('Notice', 'Google Sign-In on iOS/Android requires native Expo AuthSession setup, which is not yet configured. Please test on Web or use Email/Password.');
+        setErrorMessage('Google Sign-In on iOS/Android requires native Expo AuthSession setup, which is not yet configured. Please test on Web or use Email/Password.');
       }
     } catch (error: any) {
-      Alert.alert('Google Auth Error', error.message);
-    } finally {
-      setLoading(false);
+      console.error('Google Auth Error:', error);
+      setErrorMessage(`Error: ${error.message} (${error.code})`);
     }
   };
 
@@ -127,6 +136,12 @@ export default function LoginScreen() {
                   {isLogin ? "Don't have an account? Sign Up" : "Already have an account? Sign In"}
                 </ThemedText>
               </TouchableOpacity>
+              
+              {errorMessage ? (
+                <View style={styles.errorContainer}>
+                  <ThemedText style={styles.errorText}>{errorMessage}</ThemedText>
+                </View>
+              ) : null}
             </View>
           </View>
         </KeyboardAvoidingView>
@@ -222,5 +237,16 @@ const styles = StyleSheet.create({
   toggleText: {
     color: '#3B82F6',
     fontWeight: '600',
+  },
+  errorContainer: {
+    marginTop: Spacing.four,
+    padding: Spacing.three,
+    backgroundColor: '#FEE2E2',
+    borderRadius: Spacing.two,
+  },
+  errorText: {
+    color: '#DC2626',
+    fontSize: 14,
+    textAlign: 'center',
   },
 });
