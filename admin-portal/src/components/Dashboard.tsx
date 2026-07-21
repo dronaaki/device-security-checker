@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { collection, doc, getDoc, getDocs, setDoc } from 'firebase/firestore';
+import React, { useEffect, useState } from 'react';
+import { collection, doc, getDoc, getDocs, setDoc, addDoc, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { LogOut, Save, Users, Settings, Edit, X, TrendingUp, PieChart as PieChartIcon } from 'lucide-react';
 import { auth, db } from '../firebase';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
@@ -8,6 +8,7 @@ import { UserProfileView } from './UserProfileView';
 
 export function Dashboard() {
   const [subscribers, setSubscribers] = useState<any[]>([]);
+  const [incidents, setIncidents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   
   // AI Config state
@@ -15,6 +16,13 @@ export function Dashboard() {
   const [model, setModel] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [baseUrl, setBaseUrl] = useState('');
+
+  // Fallback Config state
+  const [enableFallback, setEnableFallback] = useState(false);
+  const [fallbackProviderId, setFallbackProviderId] = useState('mistral');
+  const [fallbackModel, setFallbackModel] = useState('');
+  const [fallbackApiKey, setFallbackApiKey] = useState('');
+  const [fallbackBaseUrl, setFallbackBaseUrl] = useState('');
   
   const defaultSystemPrompt = `You are an AI Security Advisor embedded in a mobile device security app.
 Your EXCLUSIVE job is to advise the user on their device security, explain threats, and provide actionable security recommendations based on their scan history.
@@ -34,6 +42,19 @@ CRITICAL RULES YOU MUST STRICTLY FOLLOW:
   const [testPrompt, setTestPrompt] = useState('Hello, how can you help me?');
   const [testResponse, setTestResponse] = useState('');
   const [isTesting, setIsTesting] = useState(false);
+  const [aiStatus, setAiStatus] = useState<'unknown' | 'testing' | 'online' | 'offline'>('unknown');
+  
+  // Ref to hold latest AI config for the polling interval
+  const aiConfigRef = React.useRef({ 
+    providerId, model, apiKey, baseUrl, systemPrompt,
+    enableFallback, fallbackProviderId, fallbackModel, fallbackApiKey, fallbackBaseUrl
+  });
+  useEffect(() => {
+    aiConfigRef.current = { 
+      providerId, model, apiKey, baseUrl, systemPrompt,
+      enableFallback, fallbackProviderId, fallbackModel, fallbackApiKey, fallbackBaseUrl
+    };
+  }, [providerId, model, apiKey, baseUrl, systemPrompt, enableFallback, fallbackProviderId, fallbackModel, fallbackApiKey, fallbackBaseUrl]);
 
   // Auth State
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
@@ -105,7 +126,26 @@ CRITICAL RULES YOU MUST STRICTLY FOLLOW:
           if (data.systemPrompt) {
             setSystemPrompt(data.systemPrompt);
           }
+          setEnableFallback(data.enableFallback || false);
+          setFallbackProviderId(data.fallbackProviderId || 'mistral');
+          setFallbackModel(data.fallbackModel || '');
+          setFallbackApiKey(data.fallbackApiKey || '');
+          setFallbackBaseUrl(data.fallbackBaseUrl || '');
         }
+
+        // 4. Load AI Incidents (Real-time listener for top 20)
+        if (finalIsAdmin) {
+          const incidentsQuery = query(
+            collection(db, 'ai_incidents'),
+            orderBy('timestamp', 'desc'),
+            limit(20)
+          );
+          onSnapshot(incidentsQuery, (snapshot) => {
+            const loadedIncidents = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+            setIncidents(loadedIncidents);
+          });
+        }
+
       } catch (err) {
         console.error("Error loading data:", err);
         alert("Failed to load backend data. You might not have admin permissions.");
@@ -125,7 +165,12 @@ CRITICAL RULES YOU MUST STRICTLY FOLLOW:
         model,
         apiKey,
         baseUrl,
-        systemPrompt
+        systemPrompt,
+        enableFallback,
+        fallbackProviderId,
+        fallbackModel,
+        fallbackApiKey,
+        fallbackBaseUrl
       }, { merge: true });
       setIsEditingPrompt(false);
       alert("AI Configuration saved successfully!");
@@ -137,77 +182,224 @@ CRITICAL RULES YOU MUST STRICTLY FOLLOW:
     }
   };
 
+  const logIncident = async (config: any, type: 'primary' | 'fallback', errorMsg: string) => {
+    try {
+      await addDoc(collection(db, 'ai_incidents'), {
+        timestamp: new Date().toISOString(),
+        providerId: config.providerId,
+        type,
+        error: errorMsg,
+        source: 'admin-portal'
+      });
+    } catch (e) {
+      console.error("Failed to log incident:", e);
+    }
+  };
+
+  const fetchAI = async (promptText: string, maxTokens: number, config: any) => {
+    const { providerId, baseUrl, model, apiKey, systemPrompt } = config;
+    let targetUrl = '';
+    if (providerId === 'anthropic') {
+      targetUrl = (baseUrl || 'https://api.anthropic.com/v1/messages').replace(/\/+$/, '');
+    } else if (providerId === 'ollama') {
+      targetUrl = (baseUrl || 'http://localhost:11434/api/chat').replace(/\/+$/, '');
+    } else if (providerId === 'gemini') {
+      const cleanModel = (model || 'gemini-1.5-flash').replace(/^models\//, '').trim();
+      targetUrl = (baseUrl || `https://generativelanguage.googleapis.com/v1beta/models/${cleanModel}:generateContent?key=${apiKey}`).replace(/\/+$/, '');
+    } else if (providerId === 'groq') {
+      targetUrl = (baseUrl || 'https://api.groq.com/openai/v1/chat/completions').replace(/\/+$/, '');
+    } else if (providerId === 'mistral') {
+      targetUrl = (baseUrl || 'https://api.mistral.ai/v1/chat/completions').replace(/\/+$/, '');
+    } else if (providerId === 'deepseek') {
+      targetUrl = (baseUrl || 'https://api.deepseek.com/v1/chat/completions').replace(/\/+$/, '');
+    } else if (providerId === 'qwen') {
+      targetUrl = (baseUrl || 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions').replace(/\/+$/, '');
+    } else if (providerId === 'zhipu') {
+      targetUrl = (baseUrl || 'https://open.bigmodel.cn/api/paas/v4/chat/completions').replace(/\/+$/, '');
+    } else if (providerId === 'moonshot') {
+      targetUrl = (baseUrl || 'https://api.moonshot.cn/v1/chat/completions').replace(/\/+$/, '');
+    } else if (providerId === 'baichuan') {
+      targetUrl = (baseUrl || 'https://api.baichuan-ai.com/v1/chat/completions').replace(/\/+$/, '');
+    } else if (providerId === 'yi') {
+      targetUrl = (baseUrl || 'https://api.01.ai/v1/chat/completions').replace(/\/+$/, '');
+    } else if (providerId === 'openrouter') {
+      targetUrl = (baseUrl || 'https://openrouter.ai/api/v1/chat/completions').replace(/\/+$/, '');
+    } else {
+      targetUrl = (baseUrl || 'https://api.openai.com/v1/chat/completions').replace(/\/+$/, '');
+    }
+
+    let bodyPayload: any = {};
+    let customHeaders: any = { 'Content-Type': 'application/json' };
+
+    if (providerId === 'anthropic') {
+      customHeaders['anthropic-version'] = '2023-06-01';
+      customHeaders['x-api-key'] = apiKey;
+      bodyPayload = {
+        model: model || 'claude-3-haiku-20240307',
+        max_tokens: maxTokens,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: promptText }]
+      };
+    } else if (providerId === 'ollama') {
+      bodyPayload = {
+        model: model || 'llama3.2:3b',
+        stream: false,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: promptText }
+        ]
+      };
+    } else if (providerId === 'gemini') {
+      bodyPayload = {
+        contents: [{ parts: [{ text: promptText }] }],
+        systemInstruction: { parts: [{ text: systemPrompt }] }
+      };
+    } else {
+      if (apiKey) customHeaders['Authorization'] = `Bearer ${apiKey}`;
+      
+      let defaultModel = 'gpt-3.5-turbo';
+      if (providerId === 'groq') defaultModel = 'llama3-8b-8192';
+      if (providerId === 'mistral') defaultModel = 'mistral-tiny';
+      if (providerId === 'deepseek') defaultModel = 'deepseek-chat';
+      if (providerId === 'qwen') defaultModel = 'qwen-max';
+      if (providerId === 'zhipu') defaultModel = 'glm-4';
+      if (providerId === 'moonshot') defaultModel = 'moonshot-v1-8k';
+      if (providerId === 'baichuan') defaultModel = 'Baichuan4';
+      if (providerId === 'yi') defaultModel = 'yi-large';
+      
+      bodyPayload = {
+        model: model || defaultModel,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: promptText }
+        ]
+      };
+      // For standard OpenAI we can pass max_tokens
+      if (providerId !== 'o1-preview' && providerId !== 'o1-mini') {
+        bodyPayload.max_tokens = maxTokens;
+      }
+    }
+
+    const res = await fetch('http://localhost:3001/proxy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url: targetUrl,
+        headers: customHeaders,
+        body: bodyPayload
+      })
+    });
+
+    if (!res.ok) {
+      const errorText = await res.text();
+      // Throw with a specific signature we can catch
+      const error = new Error(errorText);
+      (error as any).status = res.status;
+      throw error;
+    }
+    return await res.json();
+  };
+
   const handleTestAI = async () => {
     setIsTesting(true);
-    setTestResponse('Connecting to AI provider...');
+    setAiStatus('testing');
+    setTestResponse('Connecting to primary AI provider...');
     try {
-      if (providerId === 'anthropic') {
-        const url = (baseUrl || 'https://api.anthropic.com/v1').replace(/\/+$/, '');
-        // Use a CORS proxy for browser testing
-        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(`${url}/messages`)}`;
+      const primaryConfig = { providerId, baseUrl, model, apiKey, systemPrompt };
+      let data;
+      try {
+        data = await fetchAI(testPrompt, 250, primaryConfig);
+        setTestResponse('PRIMARY SUCCESS: \n\n' + formatAIResponse(providerId, data));
+        setAiStatus('online');
+      } catch (err: any) {
+        logIncident(primaryConfig, 'primary', err.message || err.toString());
+        if (!enableFallback) throw err;
         
-        const res = await fetch(proxyUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'anthropic-version': '2023-06-01',
-            'x-api-key': apiKey,
-          },
-          body: JSON.stringify({
-            model: model || 'claude-3-haiku-20240307',
-            max_tokens: 250,
-            system: systemPrompt,
-            messages: [{ role: 'user', content: testPrompt }]
-          })
-        });
-        if (!res.ok) throw new Error(await res.text());
-        const data = await res.json();
-        setTestResponse(data?.content?.[0]?.text || JSON.stringify(data));
-      } else if (providerId === 'ollama') {
-        const url = (baseUrl || 'http://localhost:11434').replace(/\/+$/, '');
-        const res = await fetch(`${url}/api/chat`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            model: model || 'llama3.2:3b',
-            stream: false,
-            messages: [
-              { role: 'system', content: systemPrompt },
-              { role: 'user', content: testPrompt }
-            ]
-          })
-        });
-        if (!res.ok) throw new Error(await res.text());
-        const data = await res.json();
-        setTestResponse(data?.message?.content || JSON.stringify(data));
-      } else {
-        const url = (baseUrl || (providerId === 'openrouter' ? 'https://openrouter.ai/api/v1' : 'https://api.openai.com/v1')).replace(/\/+$/, '');
-        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(`${url}/chat/completions`)}`;
+        console.warn('Primary AI failed, trying fallback...', err);
+        setTestResponse(`Primary failed (${err.message || 'Error'}). Connecting to fallback AI provider...`);
         
-        const res = await fetch(proxyUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(apiKey ? { 'Authorization': `Bearer ${apiKey}` } : {})
-          },
-          body: JSON.stringify({
-            model: model || 'gpt-3.5-turbo',
-            messages: [
-              { role: 'system', content: systemPrompt },
-              { role: 'user', content: testPrompt }
-            ]
-          })
-        });
-        if (!res.ok) throw new Error(await res.text());
-        const data = await res.json();
-        setTestResponse(data?.choices?.[0]?.message?.content || JSON.stringify(data));
+        const fallbackConfig = { 
+          providerId: fallbackProviderId, 
+          baseUrl: fallbackBaseUrl, 
+          model: fallbackModel, 
+          apiKey: fallbackApiKey, 
+          systemPrompt 
+        };
+        try {
+          data = await fetchAI(testPrompt, 250, fallbackConfig);
+          setTestResponse('FALLBACK SUCCESS: \n\n' + formatAIResponse(fallbackProviderId, data));
+          setAiStatus('online');
+        } catch (fbErr: any) {
+          logIncident(fallbackConfig, 'fallback', fbErr.message || fbErr.toString());
+          throw fbErr; // throw original or fallback error?
+        }
       }
     } catch (err: any) {
-      setTestResponse(`Error: ${err.message || err.toString()}\n\nNote: If you still see a CORS or Failed to Fetch error, it means the public proxy also failed. Don't worry, the integration will still work on the actual mobile app!`);
+      setAiStatus('offline');
+      setTestResponse(`Error: ${err.message || err.toString()}\n\nMake sure you have started the local proxy server (node local-proxy.mjs)!`);
     } finally {
       setIsTesting(false);
     }
   };
+
+  const formatAIResponse = (id: string, data: any) => {
+    if (id === 'anthropic') {
+      return data?.content?.[0]?.text || JSON.stringify(data);
+    } else if (id === 'ollama') {
+      return data?.message?.content || JSON.stringify(data);
+    } else if (id === 'gemini') {
+      return data?.candidates?.[0]?.content?.parts?.[0]?.text || JSON.stringify(data);
+    } else {
+      return data?.choices?.[0]?.message?.content || JSON.stringify(data);
+    }
+  };
+
+  // Automated 60-second polling for AI status
+  useEffect(() => {
+    if (!isAdmin) return;
+
+    const pollAI = async () => {
+      const config = aiConfigRef.current;
+      if (config.providerId !== 'ollama' && !config.apiKey) return;
+
+      try {
+        setAiStatus('testing');
+        try {
+          await fetchAI('Ping', 5, config);
+        } catch (err: any) {
+          logIncident(config, 'primary', err.message || err.toString());
+          if (!config.enableFallback) throw err;
+          const fallbackConfig = {
+            providerId: config.fallbackProviderId,
+            model: config.fallbackModel,
+            apiKey: config.fallbackApiKey,
+            baseUrl: config.fallbackBaseUrl,
+            systemPrompt: config.systemPrompt
+          };
+          try {
+            await fetchAI('Ping', 5, fallbackConfig);
+          } catch (fbErr: any) {
+            logIncident(fallbackConfig, 'fallback', fbErr.message || fbErr.toString());
+            throw fbErr;
+          }
+        }
+        setAiStatus('online');
+      } catch (err) {
+        setAiStatus('offline');
+      }
+    };
+
+    // Initial check after a short delay
+    const initialTimer = setTimeout(pollAI, 3000);
+    
+    // Check every 60 seconds
+    const interval = setInterval(pollAI, 60000);
+    
+    return () => {
+      clearTimeout(initialTimer);
+      clearInterval(interval);
+    };
+  }, [isAdmin]);
 
   const openEditModal = (e: React.MouseEvent, user: any) => {
     e.stopPropagation(); // prevent opening profile
@@ -342,8 +534,28 @@ CRITICAL RULES YOU MUST STRICTLY FOLLOW:
     <div className="app-container animate-in">
       <nav className="top-nav">
         <div>
-          <h1>Device Security Admin</h1>
-          <p>Logged in as {auth.currentUser?.email} {isSuperadmin ? '(Superadmin)' : '(Admin)'}</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.25rem' }}>
+            <h1 style={{ margin: 0 }}>Device Security Admin</h1>
+            
+            {/* Global AI Status LED Indicator */}
+            <div 
+              title={`AI Status: ${aiStatus.toUpperCase()}`}
+              style={{ 
+                width: '12px', 
+                height: '12px', 
+                borderRadius: '50%',
+                backgroundColor: aiStatus === 'online' ? '#10b981' : aiStatus === 'offline' ? '#ef4444' : aiStatus === 'testing' ? '#f59e0b' : '#64748b',
+                boxShadow: aiStatus === 'online' ? '0 0 10px 2px rgba(16, 185, 129, 0.6)' : 
+                          aiStatus === 'offline' ? '0 0 10px 2px rgba(239, 68, 68, 0.6)' : 
+                          aiStatus === 'testing' ? '0 0 10px 2px rgba(245, 158, 11, 0.6)' : 'none',
+                transition: 'all 0.3s ease'
+              }} 
+            />
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginLeft: '-0.5rem', textTransform: 'uppercase', letterSpacing: '1px' }}>
+              {aiStatus}
+            </span>
+          </div>
+          <p style={{ margin: 0 }}>Logged in as {auth.currentUser?.email} {isSuperadmin ? '(Superadmin)' : '(Admin)'}</p>
         </div>
         <button className="btn" onClick={() => auth.signOut()} style={{ background: 'transparent', border: '1px solid var(--border-color)' }}>
           <LogOut size={18} /> Sign Out
@@ -392,6 +604,10 @@ CRITICAL RULES YOU MUST STRICTLY FOLLOW:
           <div className="glass-panel" style={{ padding: '1.5rem', textAlign: 'center' }}>
             <h3 style={{ margin: '0 0 0.5rem 0', color: 'var(--text-muted)' }}>Active Admins</h3>
             <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: '#8b5cf6' }}>{activeAdmins}</div>
+          </div>
+          <div className="glass-panel" style={{ padding: '1.5rem', textAlign: 'center' }}>
+            <h3 style={{ margin: '0 0 0.5rem 0', color: 'var(--text-muted)' }}>AI Incidents (Recent)</h3>
+            <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: incidents.length > 0 ? '#ef4444' : '#10b981' }}>{incidents.length}</div>
           </div>
         </div>
 
@@ -462,10 +678,19 @@ CRITICAL RULES YOU MUST STRICTLY FOLLOW:
           <form onSubmit={handleSaveConfig}>
             <label className="input-label">Provider ID</label>
             <select className="input-field" value={providerId} onChange={(e) => setProviderId(e.target.value)}>
+              <option value="gemini">Google Gemini</option>
               <option value="ollama">Ollama (Local)</option>
               <option value="anthropic">Anthropic (Claude)</option>
+              <option value="openai">OpenAI</option>
               <option value="openrouter">OpenRouter</option>
-              <option value="huggingface">Hugging Face</option>
+              <option value="groq">Groq</option>
+              <option value="mistral">Mistral AI</option>
+              <option value="deepseek">DeepSeek</option>
+              <option value="qwen">Qwen (Alibaba)</option>
+              <option value="zhipu">Zhipu (GLM)</option>
+              <option value="moonshot">Moonshot (Kimi)</option>
+              <option value="baichuan">Baichuan</option>
+              <option value="yi">Yi (01.AI)</option>
             </select>
 
             <label className="input-label">API Key</label>
@@ -494,6 +719,73 @@ CRITICAL RULES YOU MUST STRICTLY FOLLOW:
               value={baseUrl}
               onChange={(e) => setBaseUrl(e.target.value)}
             />
+
+            <div style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+                <input 
+                  type="checkbox" 
+                  id="enableFallback"
+                  checked={enableFallback}
+                  onChange={(e) => setEnableFallback(e.target.checked)}
+                  style={{ width: '1rem', height: '1rem', cursor: 'pointer' }}
+                />
+                <label htmlFor="enableFallback" style={{ fontWeight: 600, cursor: 'pointer', margin: 0 }}>
+                  Enable Fallback AI Provider
+                </label>
+              </div>
+
+              {enableFallback && (
+                <div style={{ padding: '1rem', background: 'rgba(0,0,0,0.2)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
+                    If the primary model fails or gets rate-limited, traffic will automatically route to this provider instead.
+                  </p>
+                  
+                  <label className="input-label">Fallback Provider ID</label>
+                  <select className="input-field" value={fallbackProviderId} onChange={(e) => setFallbackProviderId(e.target.value)}>
+                    <option value="gemini">Google Gemini</option>
+                    <option value="ollama">Ollama (Local)</option>
+                    <option value="anthropic">Anthropic (Claude)</option>
+                    <option value="openai">OpenAI</option>
+                    <option value="openrouter">OpenRouter</option>
+                    <option value="groq">Groq</option>
+                    <option value="mistral">Mistral AI</option>
+                    <option value="deepseek">DeepSeek</option>
+                    <option value="qwen">Qwen (Alibaba)</option>
+                    <option value="zhipu">Zhipu (GLM)</option>
+                    <option value="moonshot">Moonshot (Kimi)</option>
+                    <option value="baichuan">Baichuan</option>
+                    <option value="yi">Yi (01.AI)</option>
+                  </select>
+
+                  <label className="input-label">Fallback API Key</label>
+                  <input 
+                    type="password" 
+                    className="input-field" 
+                    placeholder="sk-..."
+                    value={fallbackApiKey}
+                    onChange={(e) => setFallbackApiKey(e.target.value)}
+                  />
+
+                  <label className="input-label">Fallback Model Override (Optional)</label>
+                  <input 
+                    type="text" 
+                    className="input-field" 
+                    placeholder="e.g. claude-3-haiku-20240307"
+                    value={fallbackModel}
+                    onChange={(e) => setFallbackModel(e.target.value)}
+                  />
+
+                  <label className="input-label">Fallback Base URL (Optional)</label>
+                  <input 
+                    type="text" 
+                    className="input-field" 
+                    placeholder="https://..."
+                    value={fallbackBaseUrl}
+                    onChange={(e) => setFallbackBaseUrl(e.target.value)}
+                  />
+                </div>
+              )}
+            </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1.5rem', marginBottom: '0.5rem' }}>
               <label className="input-label" style={{ margin: 0 }}>Custom AI Instructions</label>
@@ -553,6 +845,32 @@ CRITICAL RULES YOU MUST STRICTLY FOLLOW:
                   {testResponse}
                 </div>
               </div>
+            )}
+          </div>
+          
+          {/* AI Incident Reports */}
+          <div style={{ marginTop: '2.5rem', paddingTop: '1.5rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+            <h3 style={{ marginBottom: '1rem', color: 'var(--text-color)' }}>AI Incident Reports</h3>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
+              Shows recent AI provider failures, API errors, or rate limits.
+            </p>
+            {incidents.length === 0 ? (
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>No incidents recorded recently.</p>
+            ) : (
+              <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {incidents.map((incident) => (
+                  <li key={incident.id} style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '8px', padding: '0.75rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
+                      <span style={{ fontWeight: 'bold', color: '#ef4444' }}>{incident.providerId} ({incident.type})</span>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{new Date(incident.timestamp).toLocaleString()}</span>
+                    </div>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-color)', marginBottom: '0.25rem' }}>
+                      <strong>Error:</strong> {incident.error}
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Source: {incident.source}</div>
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
         </div>

@@ -1,7 +1,8 @@
 import { createAnthropicProvider } from './providers/anthropic';
 import { createOpenAICompatibleProvider } from './providers/openai-compatible';
+import { createGeminiProvider } from './providers/gemini';
 import { AIProvider, AIProviderConfig, AIProviderFactory } from './types';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, addDoc } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 
 export * from './types';
@@ -12,12 +13,77 @@ export * from './types';
  * doesn't, write an adapter satisfying AIProvider like ./providers/anthropic.
  */
 export const AI_PROVIDERS: Record<string, AIProviderFactory> = {
+  gemini: createGeminiProvider,
+  
   anthropic: createAnthropicProvider,
 
   openrouter: createOpenAICompatibleProvider({
     id: 'openrouter',
     label: 'OpenRouter',
     defaultBaseUrl: 'https://openrouter.ai/api/v1',
+    requiresApiKey: true,
+  }),
+
+  openai: createOpenAICompatibleProvider({
+    id: 'openai',
+    label: 'OpenAI',
+    defaultBaseUrl: 'https://api.openai.com/v1',
+    requiresApiKey: true,
+  }),
+
+  groq: createOpenAICompatibleProvider({
+    id: 'groq',
+    label: 'Groq',
+    defaultBaseUrl: 'https://api.groq.com/openai/v1',
+    requiresApiKey: true,
+  }),
+
+  mistral: createOpenAICompatibleProvider({
+    id: 'mistral',
+    label: 'Mistral AI',
+    defaultBaseUrl: 'https://api.mistral.ai/v1',
+    requiresApiKey: true,
+  }),
+
+  deepseek: createOpenAICompatibleProvider({
+    id: 'deepseek',
+    label: 'DeepSeek',
+    defaultBaseUrl: 'https://api.deepseek.com/v1',
+    requiresApiKey: true,
+  }),
+
+  qwen: createOpenAICompatibleProvider({
+    id: 'qwen',
+    label: 'Qwen (Alibaba)',
+    defaultBaseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    requiresApiKey: true,
+  }),
+
+  zhipu: createOpenAICompatibleProvider({
+    id: 'zhipu',
+    label: 'Zhipu (GLM)',
+    defaultBaseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+    requiresApiKey: true,
+  }),
+
+  moonshot: createOpenAICompatibleProvider({
+    id: 'moonshot',
+    label: 'Moonshot (Kimi)',
+    defaultBaseUrl: 'https://api.moonshot.cn/v1',
+    requiresApiKey: true,
+  }),
+
+  baichuan: createOpenAICompatibleProvider({
+    id: 'baichuan',
+    label: 'Baichuan',
+    defaultBaseUrl: 'https://api.baichuan-ai.com/v1',
+    requiresApiKey: true,
+  }),
+
+  yi: createOpenAICompatibleProvider({
+    id: 'yi',
+    label: 'Yi (01.AI)',
+    defaultBaseUrl: 'https://api.01.ai/v1',
     requiresApiKey: true,
   }),
 
@@ -95,6 +161,12 @@ export async function createProviderFromFirestore(): Promise<AIProvider> {
   let model = process.env.EXPO_PUBLIC_AI_MODEL ?? DEFAULT_MODELS[id];
   let baseUrl = process.env.EXPO_PUBLIC_AI_BASE_URL || undefined;
   let apiKey = process.env.EXPO_PUBLIC_AI_API_KEY || undefined;
+  
+  let enableFallback = false;
+  let fallbackId = 'mistral';
+  let fallbackModel = '';
+  let fallbackBaseUrl: string | undefined = undefined;
+  let fallbackApiKey: string | undefined = undefined;
 
   try {
     const configDoc = await getDoc(doc(db, 'config', 'ai_provider'));
@@ -104,27 +176,83 @@ export async function createProviderFromFirestore(): Promise<AIProvider> {
       if (data.model) model = data.model;
       if (data.baseUrl) baseUrl = data.baseUrl;
       if (data.apiKey) apiKey = data.apiKey;
+      
+      if (data.enableFallback) {
+        enableFallback = true;
+        if (data.fallbackProviderId) fallbackId = data.fallbackProviderId;
+        if (data.fallbackModel) fallbackModel = data.fallbackModel;
+        if (data.fallbackBaseUrl) fallbackBaseUrl = data.fallbackBaseUrl;
+        if (data.fallbackApiKey) fallbackApiKey = data.fallbackApiKey;
+      }
     }
   } catch (error) {
     console.warn("Could not fetch AI config from Firestore, falling back to env", error);
   }
 
   const factory = AI_PROVIDERS[id];
-
   if (!factory) {
-    throw new AIConfigError(
-      `Unknown AI provider "${id}". Set to one of: ${Object.keys(AI_PROVIDERS).join(', ')}.`
-    );
+    throw new AIConfigError(`Unknown AI provider "${id}".`);
   }
 
   const config: AIProviderConfig = { model, baseUrl, apiKey };
-  const provider = factory(config);
+  const primaryProvider = factory(config);
 
-  if (provider.requiresApiKey && !config.apiKey && !config.baseUrl) {
+  if (primaryProvider.requiresApiKey && !config.apiKey && !config.baseUrl) {
     throw new AIConfigError(
-      `${provider.label} needs an API key. Please configure it in the Admin Dashboard.`
+      `${primaryProvider.label} needs an API key. Please configure it in the Admin Dashboard.`
     );
   }
 
-  return provider;
+  // If fallback is not enabled or not configured, return the primary provider directly.
+  if (!enableFallback) {
+    return primaryProvider;
+  }
+
+  const fallbackFactory = AI_PROVIDERS[fallbackId];
+  if (!fallbackFactory) {
+    console.warn(`Unknown fallback provider "${fallbackId}". Ignoring fallback.`);
+    return primaryProvider;
+  }
+
+  const fallbackProvider = fallbackFactory({
+    model: fallbackModel || DEFAULT_MODELS[fallbackId] || '',
+    baseUrl: fallbackBaseUrl,
+    apiKey: fallbackApiKey
+  });
+
+  const logIncident = async (pid: string, type: 'primary' | 'fallback', err: any) => {
+    try {
+      await addDoc(collection(db, 'ai_incidents'), {
+        timestamp: new Date().toISOString(),
+        providerId: pid,
+        type,
+        error: err.message || err.toString(),
+        source: 'mobile-app'
+      });
+    } catch (e) {
+      console.warn("Failed to log AI incident to Firestore:", e);
+    }
+  };
+
+  // Return a composite provider that catches errors and tries the fallback
+  return {
+    id: primaryProvider.id,
+    label: primaryProvider.label + ' (with Fallback)',
+    requiresApiKey: primaryProvider.requiresApiKey,
+    async complete(request) {
+      try {
+        return await primaryProvider.complete(request);
+      } catch (err: any) {
+        logIncident(primaryProvider.id, 'primary', err);
+        console.warn(`Primary AI (${primaryProvider.label}) failed: ${err.message}. Retrying with fallback (${fallbackProvider.label})...`);
+        
+        try {
+          return await fallbackProvider.complete(request);
+        } catch (fbErr: any) {
+          logIncident(fallbackProvider.id, 'fallback', fbErr);
+          throw fbErr;
+        }
+      }
+    }
+  };
 }
