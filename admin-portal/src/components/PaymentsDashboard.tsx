@@ -8,7 +8,7 @@ export function PaymentsDashboard() {
   const [saving, setSaving] = useState(false);
 
   // General Settings
-  const [activeProvider, setActiveProvider] = useState<'stripe' | 'paypal'>('stripe');
+  const [activeProvider, setActiveProvider] = useState<'stripe' | 'paypal' | 'google_play' | 'apple_store' | 'apple_pay'>('stripe');
 
   // Stripe Settings
   const [stripePublishableKey, setStripePublishableKey] = useState('');
@@ -19,6 +19,17 @@ export function PaymentsDashboard() {
   const [paypalClientId, setPaypalClientId] = useState('');
   const [paypalSecret, setPaypalSecret] = useState('');
   const [paypalEnvironment, setPaypalEnvironment] = useState<'sandbox' | 'live'>('sandbox');
+
+  // Google Play Settings
+  const [googlePlayPackageName, setGooglePlayPackageName] = useState('');
+  const [googlePlayServiceAccount, setGooglePlayServiceAccount] = useState('');
+
+  // Apple Store Settings
+  const [appleStoreBundleId, setAppleStoreBundleId] = useState('');
+  const [appleStoreSharedSecret, setAppleStoreSharedSecret] = useState('');
+
+  // Apple Pay Settings
+  const [applePayMerchantId, setApplePayMerchantId] = useState('');
 
   useEffect(() => {
     async function loadConfig() {
@@ -35,6 +46,14 @@ export function PaymentsDashboard() {
           setPaypalClientId(data.paypalClientId || '');
           setPaypalSecret(data.paypalSecret || '');
           setPaypalEnvironment(data.paypalEnvironment || 'sandbox');
+
+          setGooglePlayPackageName(data.googlePlayPackageName || '');
+          setGooglePlayServiceAccount(data.googlePlayServiceAccount || '');
+
+          setAppleStoreBundleId(data.appleStoreBundleId || '');
+          setAppleStoreSharedSecret(data.appleStoreSharedSecret || '');
+
+          setApplePayMerchantId(data.applePayMerchantId || '');
         }
       } catch (err) {
         console.error("Failed to load payment config", err);
@@ -57,6 +76,11 @@ export function PaymentsDashboard() {
         paypalClientId,
         paypalSecret,
         paypalEnvironment,
+        googlePlayPackageName,
+        googlePlayServiceAccount,
+        appleStoreBundleId,
+        appleStoreSharedSecret,
+        applePayMerchantId,
         updatedAt: new Date().toISOString()
       }, { merge: true });
       alert('Payment configuration saved successfully!');
@@ -89,10 +113,13 @@ export function PaymentsDashboard() {
             <select 
               className="input-field" 
               value={activeProvider} 
-              onChange={(e) => setActiveProvider(e.target.value as 'stripe' | 'paypal')}
+              onChange={(e) => setActiveProvider(e.target.value as any)}
             >
               <option value="stripe">Stripe</option>
               <option value="paypal">PayPal</option>
+              <option value="google_play">Google Play Store</option>
+              <option value="apple_store">Apple App Store</option>
+              <option value="apple_pay">Apple Pay</option>
             </select>
           </div>
 
@@ -156,6 +183,63 @@ export function PaymentsDashboard() {
               placeholder="PayPal Secret"
               value={paypalSecret}
               onChange={(e) => setPaypalSecret(e.target.value)}
+            />
+          </div>
+
+          <div style={{ marginBottom: '2rem', display: activeProvider === 'google_play' ? 'block' : 'none' }}>
+            <h3 style={{ marginBottom: '1rem', color: '#10b981' }}>Google Play Store Configuration</h3>
+            
+            <label className="input-label">App Package Name</label>
+            <input 
+              type="text" 
+              className="input-field" 
+              placeholder="com.example.app"
+              value={googlePlayPackageName}
+              onChange={(e) => setGooglePlayPackageName(e.target.value)}
+            />
+
+            <label className="input-label">Service Account JSON (Base64 or Raw)</label>
+            <textarea 
+              className="input-field" 
+              placeholder="{...}"
+              rows={4}
+              value={googlePlayServiceAccount}
+              onChange={(e) => setGooglePlayServiceAccount(e.target.value)}
+            />
+          </div>
+
+          <div style={{ marginBottom: '2rem', display: activeProvider === 'apple_store' ? 'block' : 'none' }}>
+            <h3 style={{ marginBottom: '1rem', color: '#a855f7' }}>Apple App Store Configuration</h3>
+            
+            <label className="input-label">Bundle ID</label>
+            <input 
+              type="text" 
+              className="input-field" 
+              placeholder="com.example.app"
+              value={appleStoreBundleId}
+              onChange={(e) => setAppleStoreBundleId(e.target.value)}
+            />
+
+            <label className="input-label">App-Specific Shared Secret</label>
+            <input 
+              type="password" 
+              className="input-field" 
+              placeholder="Enter shared secret"
+              value={appleStoreSharedSecret}
+              onChange={(e) => setAppleStoreSharedSecret(e.target.value)}
+            />
+          </div>
+
+          <div style={{ marginBottom: '2rem', display: activeProvider === 'apple_pay' ? 'block' : 'none' }}>
+            <h3 style={{ marginBottom: '1rem', color: '#f43f5e' }}>Apple Pay Configuration</h3>
+            
+            <label className="input-label">Merchant ID</label>
+            <input 
+              type="text" 
+              className="input-field" 
+              placeholder="merchant.com.example"
+              value={applePayMerchantId}
+              onChange={(e) => setApplePayMerchantId(e.target.value)}
             />
           </div>
 

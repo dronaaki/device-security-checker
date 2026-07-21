@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { collection, query, orderBy, getDocs, doc, setDoc } from 'firebase/firestore';
 import { sendPasswordResetEmail } from 'firebase/auth';
-import { ArrowLeft, Trash2, Key, AlertTriangle, MessageSquare, Bell, Download } from 'lucide-react';
+import { ArrowLeft, Trash2, Key, Download } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { db, auth } from '../firebase';

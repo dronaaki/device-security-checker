@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { DollarSign, TrendingUp, Users, AlertTriangle, Database } from 'lucide-react';
 import { collection, query, orderBy, limit, getDocs, addDoc } from 'firebase/firestore';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
@@ -234,7 +234,7 @@ export function AccountingDashboard() {
                   <RechartsTooltip 
                     contentStyle={{ backgroundColor: 'var(--bg-panel)', border: '1px solid var(--border-color)', borderRadius: '8px' }} 
                     itemStyle={{ color: '#10b981', fontWeight: 'bold' }}
-                    formatter={(value: number) => [`$${value}`, 'Revenue']}
+                    formatter={(value: any) => [`$${value}`, 'Revenue']}
                   />
                   <Area type="monotone" dataKey="revenue" stroke="#10b981" fillOpacity={1} fill="url(#colorRevenue)" />
                 </AreaChart>
