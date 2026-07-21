@@ -52,6 +52,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "121adcf1-fc90-4420-813c-fae2344edd08"
+      }
+    },
+    "owner": "niifaels-team"
   }
 }

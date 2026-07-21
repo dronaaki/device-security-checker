@@ -316,7 +316,7 @@ export function CustomerSupportChat({ onCheckout }: CustomerSupportChatProps) {
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <ShieldCheck size={16} color="#10b981" />
                 <span style={{ fontSize: '11px', fontWeight: 600, color: '#34d399' }}>
-                  Unhackme Lifetime Plan
+                  Unhackme Protection Plans
                 </span>
               </div>
               <button
