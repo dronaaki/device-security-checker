@@ -97,6 +97,7 @@ CRITICAL RULES YOU MUST STRICTLY FOLLOW:
       await addDoc(msgRef, {
         role: 'assistant',
         content: response.text,
+        provider: provider.label,
         timestamp: new Date().toISOString()
       });
 
@@ -138,6 +139,11 @@ CRITICAL RULES YOU MUST STRICTLY FOLLOW:
                 <ThemedText style={{ color: msg.role === 'user' ? '#fff' : undefined }}>
                   {msg.content}
                 </ThemedText>
+                {msg.role === 'assistant' && msg.provider && (
+                  <ThemedText style={{ fontSize: 10, color: '#999', marginTop: 4, alignSelf: 'flex-end' }}>
+                    🤖 {msg.provider}
+                  </ThemedText>
+                )}
               </View>
             ))
           )}

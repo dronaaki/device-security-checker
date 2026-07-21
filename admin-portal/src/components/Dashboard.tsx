@@ -25,6 +25,7 @@ export function Dashboard() {
   const [fallbackModel, setFallbackModel] = useState('');
   const [fallbackApiKey, setFallbackApiKey] = useState('');
   const [fallbackBaseUrl, setFallbackBaseUrl] = useState('');
+  const [pingInterval, setPingInterval] = useState(60);
   
   const defaultSystemPrompt = `You are an AI Security Advisor embedded in a mobile device security app.
 Your EXCLUSIVE job is to advise the user on their device security, explain threats, and provide actionable security recommendations based on their scan history.
@@ -49,14 +50,14 @@ CRITICAL RULES YOU MUST STRICTLY FOLLOW:
   // Ref to hold latest AI config for the polling interval
   const aiConfigRef = React.useRef({ 
     providerId, model, apiKey, baseUrl, systemPrompt,
-    enableFallback, fallbackProviderId, fallbackModel, fallbackApiKey, fallbackBaseUrl
+    enableFallback, fallbackProviderId, fallbackModel, fallbackApiKey, fallbackBaseUrl, pingInterval
   });
   useEffect(() => {
     aiConfigRef.current = { 
       providerId, model, apiKey, baseUrl, systemPrompt,
-      enableFallback, fallbackProviderId, fallbackModel, fallbackApiKey, fallbackBaseUrl
+      enableFallback, fallbackProviderId, fallbackModel, fallbackApiKey, fallbackBaseUrl, pingInterval
     };
-  }, [providerId, model, apiKey, baseUrl, systemPrompt, enableFallback, fallbackProviderId, fallbackModel, fallbackApiKey, fallbackBaseUrl]);
+  }, [providerId, model, apiKey, baseUrl, systemPrompt, enableFallback, fallbackProviderId, fallbackModel, fallbackApiKey, fallbackBaseUrl, pingInterval]);
 
   // Auth State
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
@@ -133,6 +134,7 @@ CRITICAL RULES YOU MUST STRICTLY FOLLOW:
           setFallbackModel(data.fallbackModel || '');
           setFallbackApiKey(data.fallbackApiKey || '');
           setFallbackBaseUrl(data.fallbackBaseUrl || '');
+          setPingInterval(data.pingInterval || 60);
         }
 
         // 4. Load AI Incidents (Real-time listener for top 20)
@@ -172,7 +174,8 @@ CRITICAL RULES YOU MUST STRICTLY FOLLOW:
         fallbackProviderId,
         fallbackModel,
         fallbackApiKey,
-        fallbackBaseUrl
+        fallbackBaseUrl,
+        pingInterval
       }, { merge: true });
       setIsEditingPrompt(false);
       alert("AI Configuration saved successfully!");
@@ -390,13 +393,13 @@ CRITICAL RULES YOU MUST STRICTLY FOLLOW:
     };
 
     const initialTimer = setTimeout(pollAI, 3000);
-    const interval = setInterval(pollAI, 60000);
+    const interval = setInterval(pollAI, aiConfigRef.current.pingInterval * 1000);
     
     return () => {
       clearTimeout(initialTimer);
       clearInterval(interval);
     };
-  }, [isAdmin]);
+  }, [isAdmin, pingInterval]);
 
   const openEditModal = (e: React.MouseEvent, user: any) => {
     e.stopPropagation();
@@ -564,6 +567,16 @@ CRITICAL RULES YOU MUST STRICTLY FOLLOW:
               onChange={(e) => setBaseUrl(e.target.value)}
             />
 
+            <label className="input-label">Auto-Ping Interval (Seconds)</label>
+            <input 
+              type="number" 
+              className="input-field" 
+              min="10"
+              max="3600"
+              value={pingInterval}
+              onChange={(e) => setPingInterval(parseInt(e.target.value, 10))}
+            />
+
             <div style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
                 <input 
@@ -693,7 +706,7 @@ CRITICAL RULES YOU MUST STRICTLY FOLLOW:
           </div>
           
           {/* AI Incident Reports */}
-          <AIIncidentReports incidents={incidents} />
+          <AIIncidentReports incidents={incidents} isSuperadmin={isSuperadmin} />
         </div>
 
         {/* Right Column: Subscribers */}
