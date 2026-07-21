@@ -116,3 +116,54 @@ exports.chatWithAI = onCall({
     throw new HttpsError('internal', err.message || err.toString());
   }
 });
+
+exports.createCheckoutSession = onCall({
+  cors: true,
+  maxInstances: 10
+}, async (request) => {
+  const origin = request.rawRequest?.headers?.origin || "http://localhost:5173";
+  
+  try {
+    const configDoc = await db.collection("config").doc("payment_provider").get();
+    if (!configDoc.exists) {
+      throw new HttpsError('failed-precondition', 'Payment configuration not found.');
+    }
+    const config = configDoc.data();
+    
+    if (config.activeProvider !== 'stripe') {
+      throw new HttpsError('unimplemented', 'Currently only Stripe is supported for checkout.');
+    }
+
+    if (!config.stripeSecretKey) {
+      throw new HttpsError('failed-precondition', 'Stripe Secret Key is missing in configuration.');
+    }
+
+    const stripe = require('stripe')(config.stripeSecretKey);
+
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card', 'link', 'apple_pay', 'google_pay'],
+      line_items: [
+        {
+          price_data: {
+            currency: 'usd',
+            product_data: {
+              name: 'Unhackme Lifetime Plan',
+              description: 'Lifetime AI updates, protection for 3 devices, and 24/7 priority support.',
+            },
+            unit_amount: 2999, // $29.99
+          },
+          quantity: 1,
+        },
+      ],
+      mode: 'payment',
+      success_url: `${origin}/?success=true`,
+      cancel_url: `${origin}/?canceled=true`,
+    });
+
+    return { url: session.url };
+  } catch (err) {
+    console.error("Checkout Session Error:", err);
+    throw new HttpsError('internal', err.message || err.toString());
+  }
+});
+

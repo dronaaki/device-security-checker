@@ -13,11 +13,14 @@ import {
   Cpu
 } from 'lucide-react';
 import { collection, addDoc } from 'firebase/firestore';
-import { db } from './firebase';
+import { httpsCallable } from 'firebase/functions';
+import { db, functions } from './firebase';
 
 function App() {
   const [formState, setFormState] = useState({ name: '', email: '', message: '' });
   const [formStatus, setFormStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
+  const [checkoutStatus, setCheckoutStatus] = useState<'idle' | 'loading' | 'error'>('idle');
+  const [checkoutError, setCheckoutError] = useState('');
 
   const handleSupportSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,6 +36,26 @@ function App() {
     } catch (error) {
       console.error("Support submission failed:", error);
       setFormStatus('error');
+    }
+  };
+
+  const handleCheckout = async () => {
+    setCheckoutStatus('loading');
+    setCheckoutError('');
+    try {
+      const createCheckoutSession = httpsCallable(functions, 'createCheckoutSession');
+      const result = await createCheckoutSession();
+      const data = result.data as { url: string };
+      
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error('No checkout URL returned.');
+      }
+    } catch (error: any) {
+      console.error("Checkout failed:", error);
+      setCheckoutStatus('error');
+      setCheckoutError(error.message || 'Payment provider not configured.');
     }
   };
 
@@ -252,10 +275,20 @@ function App() {
               </li>
             </ul>
 
-            <button className="btn btn-primary" style={{ width: '100%', padding: '1rem', fontSize: '1.1rem' }}>
-              Buy Now securely with Paddle
+            <button 
+              className="btn btn-primary" 
+              style={{ width: '100%', padding: '1rem', fontSize: '1.1rem' }}
+              onClick={handleCheckout}
+              disabled={checkoutStatus === 'loading'}
+            >
+              {checkoutStatus === 'loading' ? 'Initializing Secure Checkout...' : 'Buy Now securely with Stripe'}
             </button>
-            <p style={{ fontSize: '0.8rem', marginTop: '1rem' }}>Apple Pay, Google Pay, and Crypto (Coinbase) supported during checkout.</p>
+            {checkoutStatus === 'error' && (
+              <p style={{ color: '#ef4444', marginTop: '1rem', fontSize: '0.9rem' }}>
+                Error: {checkoutError}
+              </p>
+            )}
+            <p style={{ fontSize: '0.8rem', marginTop: '1rem' }}>Apple Pay, Google Pay, and standard cards supported during checkout.</p>
           </motion.div>
         </div>
       </section>
