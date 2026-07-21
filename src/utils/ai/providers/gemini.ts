@@ -70,7 +70,7 @@ export function createGeminiProvider(config: AIProviderConfig): AIProvider {
         throw new Error(`Google Gemini returned no message content: ${JSON.stringify(data)}`);
       }
 
-      return { text, model };
+      return { text, model: rawModel };
     },
   };
 }
