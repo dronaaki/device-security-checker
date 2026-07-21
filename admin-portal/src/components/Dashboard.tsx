@@ -11,9 +11,10 @@ import { PaymentsDashboard } from './PaymentsDashboard';
 import { AccountingDashboard } from './AccountingDashboard';
 import { AdminAssistant } from './AdminAssistant';
 import { WebsiteEditor } from './WebsiteEditor';
+import { WebsiteSupportAIManager } from './WebsiteSupportAIManager';
 
 export function Dashboard() {
-  const [activeTab, setActiveTab] = useState<'general' | 'payments' | 'accounting' | 'website'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'payments' | 'accounting' | 'website' | 'website_ai'>('general');
   const [subscribers, setSubscribers] = useState<any[]>([]);
   const [incidents, setIncidents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -559,25 +560,46 @@ CRITICAL RULES YOU MUST STRICTLY FOLLOW:
             )}
 
             {isAdmin && (
-              <button 
-                onClick={() => setActiveTab('website')}
-                style={{ 
-                  background: 'transparent', 
-                  border: 'none', 
-                  padding: '1rem 1.5rem', 
-                  color: activeTab === 'website' ? 'var(--text-main)' : 'var(--text-muted)', 
-                  cursor: 'pointer',
-                  fontWeight: activeTab === 'website' ? 600 : 400,
-                  fontSize: '0.95rem',
-                  borderBottom: activeTab === 'website' ? '2px solid var(--accent-color)' : '2px solid transparent',
-                  transition: 'all 0.2s',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem'
-                }}
-              >
-                Website CMS
-              </button>
+              <>
+                <button 
+                  onClick={() => setActiveTab('website')}
+                  style={{ 
+                    background: 'transparent', 
+                    border: 'none', 
+                    padding: '1rem 1.5rem', 
+                    color: activeTab === 'website' ? 'var(--text-main)' : 'var(--text-muted)', 
+                    cursor: 'pointer',
+                    fontWeight: activeTab === 'website' ? 600 : 400,
+                    fontSize: '0.95rem',
+                    borderBottom: activeTab === 'website' ? '2px solid var(--accent-color)' : '2px solid transparent',
+                    transition: 'all 0.2s',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem'
+                  }}
+                >
+                  Website CMS
+                </button>
+                <button 
+                  onClick={() => setActiveTab('website_ai')}
+                  style={{ 
+                    background: 'transparent', 
+                    border: 'none', 
+                    padding: '1rem 1.5rem', 
+                    color: activeTab === 'website_ai' ? 'var(--text-main)' : 'var(--text-muted)', 
+                    cursor: 'pointer',
+                    fontWeight: activeTab === 'website_ai' ? 600 : 400,
+                    fontSize: '0.95rem',
+                    borderBottom: activeTab === 'website_ai' ? '2px solid var(--accent-color)' : '2px solid transparent',
+                    transition: 'all 0.2s',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem'
+                  }}
+                >
+                  Website AI Support
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -614,6 +636,8 @@ CRITICAL RULES YOU MUST STRICTLY FOLLOW:
         <AccountingDashboard />
       ) : activeTab === 'website' ? (
         <WebsiteEditor />
+      ) : activeTab === 'website_ai' ? (
+        <WebsiteSupportAIManager />
       ) : (
         <>
 

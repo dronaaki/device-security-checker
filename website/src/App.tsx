@@ -15,6 +15,7 @@ import {
 import { collection, addDoc, doc, getDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from './firebase';
+import { CustomerSupportChat } from './components/CustomerSupportChat';
 
 function App() {
   const [formState, setFormState] = useState({ name: '', email: '', message: '' });
@@ -405,6 +406,9 @@ function App() {
           </p>
         </div>
       </footer>
+
+      {/* Floating Website Customer Support AI Widget */}
+      <CustomerSupportChat onCheckout={handleCheckout} />
     </>
   );
 }

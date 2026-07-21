@@ -49,9 +49,14 @@ service cloud.firestore {
       }
     }
 
-    // Config collection: Superadmin and Active Admins can read and write AI provider config
-    match /config/{document=**} {
-      allow read, write: if isSuperadmin() || (isActiveAdmin() && isNotDeleted(request.auth.uid));
+    // Config collection.
+    // payment_provider holds live payment secret keys (Stripe/PayPal/Coinbase/etc.)
+    // and must never be exposed to time-limited admins — superadmin only.
+    // Cloud Functions read it via the Admin SDK, which bypasses these rules.
+    // Other config (ai_provider, admin_assistant) stays accessible to active admins.
+    match /config/{configId} {
+      allow read, write: if isSuperadmin() ||
+        (configId != 'payment_provider' && isActiveAdmin() && isNotDeleted(request.auth.uid));
     }
 
     // AI Incidents collection: any authenticated user can create (mobile app logs failures),
@@ -91,6 +96,12 @@ service cloud.firestore {
 
     // Website Content collection: public read, admin write
     match /website_content/{document=**} {
+      allow read: if true;
+      allow write: if isSuperadmin() || isActiveAdmin();
+    }
+
+    // Website Knowledge Base collection (RAG documents from PDF/Word/URL uploads): public read, admin write
+    match /website_knowledge_base/{document=**} {
       allow read: if true;
       allow write: if isSuperadmin() || isActiveAdmin();
     }

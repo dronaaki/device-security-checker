@@ -63,7 +63,9 @@ app.post('/proxy', async (req, res) => {
 });
 
 const PORT = 3001;
-app.listen(PORT, () => {
+// Bind explicitly to loopback: this proxy has no auth, so it must never be
+// reachable from the network, only from the machine running the admin portal.
+app.listen(PORT, '127.0.0.1', () => {
   console.log(`\n✅ Local AI Proxy Server is running at http://localhost:${PORT}`);
   console.log(`Leave this terminal open while you test the AI in your browser!\n`);
 });

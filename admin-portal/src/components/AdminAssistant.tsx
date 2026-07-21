@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { Settings, Save, Send, Bot, User, ChevronDown, ChevronUp } from 'lucide-react';
-import { db } from '../firebase';
+import { httpsCallable } from 'firebase/functions';
+import { Send, Bot, User } from 'lucide-react';
+import { functions } from '../firebase';
 
 interface AdminAssistantProps {
   subscribers: any[];
@@ -14,181 +14,17 @@ interface Message {
 }
 
 export function AdminAssistant({ subscribers, incidents }: AdminAssistantProps) {
-  // Settings State
-  const [providerId, setProviderId] = useState('openai');
-  const [apiKey, setApiKey] = useState('');
-  const [model, setModel] = useState('');
-  const [baseUrl, setBaseUrl] = useState('');
-  
-  const [showSettings, setShowSettings] = useState(false);
-  const [saving, setSaving] = useState(false);
-
-  // Chat State
   const [messages, setMessages] = useState<Message[]>([
     { role: 'assistant', content: "Hello! I am your Admin AI Assistant. Ask me anything about the backend, your subscribers, or system incidents." }
   ]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  
-  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    async function loadConfig() {
-      try {
-        const configDoc = await getDoc(doc(db, 'config', 'admin_assistant'));
-        if (configDoc.exists()) {
-          const data = configDoc.data();
-          setProviderId(data.providerId || 'openai');
-          setApiKey(data.apiKey || '');
-          setModel(data.model || '');
-          setBaseUrl(data.baseUrl || '');
-        }
-      } catch (err) {
-        console.error("Failed to load admin AI config", err);
-      }
-    }
-    loadConfig();
-  }, []);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
-
-  const handleSaveConfig = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    try {
-      await setDoc(doc(db, 'config', 'admin_assistant'), {
-        providerId,
-        apiKey,
-        model,
-        baseUrl,
-        updatedAt: new Date().toISOString()
-      }, { merge: true });
-      setShowSettings(false);
-      alert("Admin Assistant configuration saved!");
-    } catch (err) {
-      console.error(err);
-      alert("Failed to save config.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const fetchAI = async (promptText: string, contextMessage: string) => {
-    let targetUrl = '';
-    if (providerId === 'anthropic') {
-      targetUrl = (baseUrl || 'https://api.anthropic.com/v1/messages').replace(/\/+$/, '');
-    } else if (providerId === 'ollama') {
-      targetUrl = (baseUrl || 'http://localhost:11434/api/chat').replace(/\/+$/, '');
-    } else if (providerId === 'gemini') {
-      const cleanModel = (model || 'gemini-1.5-flash').replace(/^models\//, '').trim();
-      targetUrl = (baseUrl || `https://generativelanguage.googleapis.com/v1beta/models/${cleanModel}:generateContent?key=${apiKey}`).replace(/\/+$/, '');
-    } else if (providerId === 'groq') {
-      targetUrl = (baseUrl || 'https://api.groq.com/openai/v1/chat/completions').replace(/\/+$/, '');
-    } else if (providerId === 'mistral') {
-      targetUrl = (baseUrl || 'https://api.mistral.ai/v1/chat/completions').replace(/\/+$/, '');
-    } else if (providerId === 'deepseek') {
-      targetUrl = (baseUrl || 'https://api.deepseek.com/v1/chat/completions').replace(/\/+$/, '');
-    } else if (providerId === 'qwen') {
-      targetUrl = (baseUrl || 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions').replace(/\/+$/, '');
-    } else if (providerId === 'zhipu') {
-      targetUrl = (baseUrl || 'https://open.bigmodel.cn/api/paas/v4/chat/completions').replace(/\/+$/, '');
-    } else if (providerId === 'moonshot') {
-      targetUrl = (baseUrl || 'https://api.moonshot.cn/v1/chat/completions').replace(/\/+$/, '');
-    } else if (providerId === 'baichuan') {
-      targetUrl = (baseUrl || 'https://api.baichuan-ai.com/v1/chat/completions').replace(/\/+$/, '');
-    } else if (providerId === 'yi') {
-      targetUrl = (baseUrl || 'https://api.01.ai/v1/chat/completions').replace(/\/+$/, '');
-    } else if (providerId === 'openrouter') {
-      targetUrl = (baseUrl || 'https://openrouter.ai/api/v1/chat/completions').replace(/\/+$/, '');
-    } else {
-      targetUrl = (baseUrl || 'https://api.openai.com/v1/chat/completions').replace(/\/+$/, '');
-    }
-
-    let bodyPayload: any = {};
-    let customHeaders: any = { 'Content-Type': 'application/json' };
-
-    const apiMessages = messages.filter((m, i) => !(i === 0 && m.role === 'assistant'));
-
-    if (providerId === 'anthropic') {
-      customHeaders['anthropic-version'] = '2023-06-01';
-      customHeaders['x-api-key'] = apiKey;
-      bodyPayload = {
-        model: model || 'claude-3-haiku-20240307',
-        max_tokens: 1024,
-        system: contextMessage,
-        messages: [...apiMessages, { role: 'user', content: promptText }]
-      };
-    } else if (providerId === 'ollama') {
-      bodyPayload = {
-        model: model || 'llama3.2:3b',
-        stream: false,
-        messages: [
-          { role: 'system', content: contextMessage },
-          ...apiMessages,
-          { role: 'user', content: promptText }
-        ]
-      };
-    } else if (providerId === 'gemini') {
-      const formattedHistory = apiMessages.map(m => ({
-        role: m.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: m.content }]
-      }));
-      bodyPayload = {
-        contents: [...formattedHistory, { role: 'user', parts: [{ text: promptText }] }],
-        systemInstruction: { parts: [{ text: contextMessage }] }
-      };
-    } else {
-      if (apiKey) customHeaders['Authorization'] = `Bearer ${apiKey}`;
-      
-      let defaultModel = 'gpt-3.5-turbo';
-      if (providerId === 'groq') defaultModel = 'llama3-8b-8192';
-      if (providerId === 'mistral') defaultModel = 'mistral-tiny';
-      if (providerId === 'deepseek') defaultModel = 'deepseek-chat';
-      if (providerId === 'qwen') defaultModel = 'qwen-max';
-      if (providerId === 'zhipu') defaultModel = 'glm-4';
-      if (providerId === 'moonshot') defaultModel = 'moonshot-v1-8k';
-      if (providerId === 'baichuan') defaultModel = 'Baichuan4';
-      if (providerId === 'yi') defaultModel = 'yi-large';
-      
-      bodyPayload = {
-        model: model || defaultModel,
-        messages: [
-          { role: 'system', content: contextMessage },
-          ...apiMessages,
-          { role: 'user', content: promptText }
-        ]
-      };
-    }
-
-    const res = await fetch('http://localhost:3001/proxy', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        url: targetUrl,
-        headers: customHeaders,
-        body: bodyPayload
-      })
-    });
-
-    if (!res.ok) {
-      const errorText = await res.text();
-      let errorJson;
-      try { errorJson = JSON.parse(errorText); } catch(e) {}
-      throw new Error(errorJson?.error?.message || errorJson?.error || errorText);
-    }
-    const data = await res.json();
-    
-    if (data.error) {
-      throw new Error(data.error.message || JSON.stringify(data.error));
-    }
-    
-    if (providerId === 'anthropic') return data?.content?.[0]?.text;
-    if (providerId === 'ollama') return data?.message?.content;
-    if (providerId === 'gemini') return data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    return data?.choices?.[0]?.message?.content;
-  };
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -200,15 +36,24 @@ export function AdminAssistant({ subscribers, incidents }: AdminAssistantProps) 
     setIsTyping(true);
 
     try {
-      // Build dynamic context string based on props
+      // Redact PII before sending to third-party AI providers.
+      const redactedSubscribers = subscribers.slice(0, 5).map((s, i) => ({
+        anonId: `subscriber_${i + 1}`,
+        isAdmin: !!s.isAdmin,
+        role: s.role,
+        isPaid: !!s.isPaid,
+        plan: s.plan,
+        createdAt: s.createdAt,
+      }));
+
       const contextMessage = `
 You are the Admin AI Assistant for a Device Security Checker platform.
-You have real-time access to the backend data. 
+You have real-time access to the backend data.
 Here is a snapshot of the current state:
 
 TOTAL SUBSCRIBERS: ${subscribers.length}
-SUBSCRIBER DATA (SAMPLE):
-${JSON.stringify(subscribers.slice(0, 5), null, 2)}
+SUBSCRIBER DATA (SAMPLE, ANONYMIZED — no names/emails/IDs):
+${JSON.stringify(redactedSubscribers, null, 2)}
 
 RECENT AI INCIDENTS (LAST 10):
 ${JSON.stringify(incidents.slice(0, 10), null, 2)}
@@ -219,12 +64,27 @@ Keep your answers concise, professional, and helpful.
 IMPORTANT: Output your response in plain text ONLY. Do NOT use Markdown, bold text, italics, headers, or bullet points. Use standard text formatting.
       `.trim();
 
-      const responseText = await fetchAI(userMessage, contextMessage);
-      
-      setMessages(prev => [...prev, { role: 'assistant', content: responseText || "I couldn't generate a response." }]);
+      // Strip the initial greeting from history before sending to the AI.
+      const apiMessages = messages.filter((m, i) => !(i === 0 && m.role === 'assistant'));
+
+      const chatWithAI = httpsCallable(functions, 'chatWithAI');
+      const result = await chatWithAI({
+        assistant: 'admin',
+        testMessages: [
+          { role: 'system', content: contextMessage },
+          ...apiMessages,
+          { role: 'user', content: userMessage },
+        ],
+      });
+      const data = result.data as { text: string };
+
+      setMessages(prev => [...prev, { role: 'assistant', content: data.text || "I couldn't generate a response." }]);
     } catch (err: any) {
       console.error(err);
-      setMessages(prev => [...prev, { role: 'assistant', content: `Error: ${err.message}` }]);
+      const msg = err?.message?.includes('permission-denied')
+        ? 'You must be an admin to use this assistant.'
+        : `Error: ${err.message}`;
+      setMessages(prev => [...prev, { role: 'assistant', content: msg }]);
     } finally {
       setIsTyping(false);
     }
@@ -237,68 +97,20 @@ IMPORTANT: Output your response in plain text ONLY. Do NOT use Markdown, bold te
           <Bot color="#3b82f6" size={24} />
           <h3 style={{ margin: 0, color: 'var(--text-main)' }}>Admin Backend Assistant</h3>
         </div>
-        <button 
-          onClick={() => setShowSettings(!showSettings)} 
-          style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
-        >
-          <Settings size={16} /> 
-          {showSettings ? 'Hide Settings' : 'Settings'}
-          {showSettings ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-        </button>
       </div>
-
-      {showSettings && (
-        <form onSubmit={handleSaveConfig} style={{ marginBottom: '1.5rem', padding: '1rem', background: 'rgba(0,0,0,0.2)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-            <div>
-              <label className="input-label">Provider</label>
-              <select className="input-field" value={providerId} onChange={(e) => setProviderId(e.target.value)}>
-                <option value="gemini">Google Gemini</option>
-                <option value="ollama">Ollama (Local)</option>
-                <option value="anthropic">Anthropic (Claude)</option>
-                <option value="openai">OpenAI</option>
-                <option value="openrouter">OpenRouter</option>
-                <option value="groq">Groq</option>
-                <option value="mistral">Mistral AI</option>
-                <option value="deepseek">DeepSeek</option>
-                <option value="qwen">Qwen (Alibaba)</option>
-                <option value="zhipu">Zhipu (GLM)</option>
-                <option value="moonshot">Moonshot (Kimi)</option>
-                <option value="baichuan">Baichuan</option>
-                <option value="yi">Yi (01.AI)</option>
-              </select>
-            </div>
-            <div>
-              <label className="input-label">API Key</label>
-              <input type="password" className="input-field" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="sk-..." />
-            </div>
-            <div>
-              <label className="input-label">Model (Optional)</label>
-              <input type="text" className="input-field" value={model} onChange={(e) => setModel(e.target.value)} placeholder="Leave blank for default" />
-            </div>
-            <div>
-              <label className="input-label">Base URL (Optional)</label>
-              <input type="text" className="input-field" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://..." />
-            </div>
-          </div>
-          <button type="submit" className="btn" disabled={saving} style={{ marginTop: '1rem', padding: '0.5rem 1rem' }}>
-            <Save size={16} style={{ marginRight: '0.5rem' }} /> {saving ? 'Saving...' : 'Save AI Config'}
-          </button>
-        </form>
-      )}
 
       {/* Chat History */}
       <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1rem', paddingRight: '0.5rem', marginBottom: '1rem' }}>
         {messages.map((msg, idx) => (
-          <div key={idx} style={{ 
-            display: 'flex', 
-            gap: '0.75rem', 
-            flexDirection: msg.role === 'user' ? 'row-reverse' : 'row' 
+          <div key={idx} style={{
+            display: 'flex',
+            gap: '0.75rem',
+            flexDirection: msg.role === 'user' ? 'row-reverse' : 'row'
           }}>
-            <div style={{ 
-              width: '32px', height: '32px', borderRadius: '50%', 
+            <div style={{
+              width: '32px', height: '32px', borderRadius: '50%',
               backgroundColor: msg.role === 'user' ? 'var(--accent-color)' : '#3b82f6',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
             }}>
               {msg.role === 'user' ? <User size={16} color="white" /> : <Bot size={16} color="white" />}
             </div>
@@ -332,24 +144,19 @@ IMPORTANT: Output your response in plain text ONLY. Do NOT use Markdown, bold te
 
       {/* Input */}
       <form onSubmit={handleSendMessage} style={{ display: 'flex', gap: '0.5rem' }}>
-        <input 
-          type="text" 
-          className="input-field" 
-          placeholder="Ask about subscribers, backend metrics, or incidents..." 
+        <input
+          type="text"
+          className="input-field"
+          placeholder="Ask about subscribers, backend metrics, or incidents..."
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          disabled={isTyping || (!apiKey && providerId !== 'ollama')}
+          disabled={isTyping}
           style={{ flex: 1, margin: 0 }}
         />
-        <button type="submit" className="btn" disabled={isTyping || !input.trim() || (!apiKey && providerId !== 'ollama')} style={{ padding: '0 1.25rem' }}>
+        <button type="submit" className="btn" disabled={isTyping || !input.trim()} style={{ padding: '0 1.25rem' }}>
           <Send size={18} />
         </button>
       </form>
-      {(!apiKey && providerId !== 'ollama') && (
-        <p style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '0.5rem', textAlign: 'center' }}>
-          Please configure your API key in Settings to use the assistant.
-        </p>
-      )}
     </div>
   );
 }
