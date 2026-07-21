@@ -8,13 +8,14 @@ import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, MaxContentWidth, Spacing, Colors } from '@/constants/theme';
 import { auth, db } from '@/utils/firebaseConfig';
 import { getRecentLogs } from '@/utils/securityLogs';
-import { createProviderFromFirestore } from '@/utils/ai';
+import { createProviderFromFirestore, AIProvider } from '@/utils/ai';
 
 export default function ChatScreen() {
   const [messages, setMessages] = useState<any[]>([]);
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
+  const providerRef = useRef<AIProvider | null>(null);
 
   useEffect(() => {
     if (!auth.currentUser) return;
@@ -29,6 +30,13 @@ export default function ChatScreen() {
     });
     return unsubscribe;
   }, []);
+
+  const getProvider = async (): Promise<AIProvider> => {
+    if (!providerRef.current) {
+      providerRef.current = await createProviderFromFirestore();
+    }
+    return providerRef.current;
+  };
 
   const handleSend = async () => {
     if (!inputText.trim() || !auth.currentUser) return;
@@ -81,8 +89,8 @@ CRITICAL RULES YOU MUST STRICTLY FOLLOW:
         { role: 'user', content: userText }
       ];
 
-      // 4. Call AI Provider
-      const provider = await createProviderFromFirestore();
+      // 4. Call AI Provider (cached)
+      const provider = await getProvider();
       const response = await provider.complete({ messages: aiMessages });
 
       // 5. Save AI response to Firestore

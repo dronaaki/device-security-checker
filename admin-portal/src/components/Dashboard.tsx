@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { collection, doc, getDoc, getDocs, setDoc, addDoc, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
-import { LogOut, Save, Users, Settings, Edit, X, TrendingUp, PieChart as PieChartIcon } from 'lucide-react';
+import { LogOut, Save, Settings, X } from 'lucide-react';
 import { auth, db } from '../firebase';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 import { UserProfileView } from './UserProfileView';
+import { AnalyticsDashboard } from './AnalyticsDashboard';
+import { AIIncidentReports } from './AIIncidentReports';
+import { SubscriberList } from './SubscriberList';
 
 export function Dashboard() {
   const [subscribers, setSubscribers] = useState<any[]>([]);
@@ -274,7 +276,6 @@ CRITICAL RULES YOU MUST STRICTLY FOLLOW:
           { role: 'user', content: promptText }
         ]
       };
-      // For standard OpenAI we can pass max_tokens
       if (providerId !== 'o1-preview' && providerId !== 'o1-mini') {
         bodyPayload.max_tokens = maxTokens;
       }
@@ -292,7 +293,6 @@ CRITICAL RULES YOU MUST STRICTLY FOLLOW:
 
     if (!res.ok) {
       const errorText = await res.text();
-      // Throw with a specific signature we can catch
       const error = new Error(errorText);
       (error as any).status = res.status;
       throw error;
@@ -331,7 +331,7 @@ CRITICAL RULES YOU MUST STRICTLY FOLLOW:
           setAiStatus('online');
         } catch (fbErr: any) {
           logIncident(fallbackConfig, 'fallback', fbErr.message || fbErr.toString());
-          throw fbErr; // throw original or fallback error?
+          throw fbErr;
         }
       }
     } catch (err: any) {
@@ -389,10 +389,7 @@ CRITICAL RULES YOU MUST STRICTLY FOLLOW:
       }
     };
 
-    // Initial check after a short delay
     const initialTimer = setTimeout(pollAI, 3000);
-    
-    // Check every 60 seconds
     const interval = setInterval(pollAI, 60000);
     
     return () => {
@@ -402,7 +399,7 @@ CRITICAL RULES YOU MUST STRICTLY FOLLOW:
   }, [isAdmin]);
 
   const openEditModal = (e: React.MouseEvent, user: any) => {
-    e.stopPropagation(); // prevent opening profile
+    e.stopPropagation();
     setEditingUser(user);
     setEditRole(user.role || '');
     setEditIsAdmin(user.isAdmin || false);
@@ -462,74 +459,6 @@ CRITICAL RULES YOU MUST STRICTLY FOLLOW:
     );
   }
 
-  // --- Derived Statistics & Chart Data ---
-  const totalSubscribers = subscribers.length;
-  const now = new Date();
-  let cutoffDate = new Date(0);
-  let periodLabel = 'All Time';
-
-  switch (timeFilter) {
-    case 'week':
-      cutoffDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7);
-      periodLabel = 'Last 7 Days';
-      break;
-    case 'month':
-      cutoffDate = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
-      periodLabel = 'Last 30 Days';
-      break;
-    case 'quarter':
-      cutoffDate = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate());
-      periodLabel = 'Last 3 Months';
-      break;
-    case 'semi-annual':
-      cutoffDate = new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
-      periodLabel = 'Last 6 Months';
-      break;
-    case 'year':
-      cutoffDate = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
-      periodLabel = 'Last Year';
-      break;
-    case 'all':
-    default:
-      cutoffDate = new Date(0);
-      periodLabel = 'All Time';
-      break;
-  }
-
-  const filteredSubscribers = subscribers.filter(s => s.createdAt && new Date(s.createdAt) >= cutoffDate);
-  const newSubscribers = filteredSubscribers.length;
-  const activeAdmins = subscribers.filter(s => s.isAdmin && (!s.accessExpiresAtMillis || Date.now() < s.accessExpiresAtMillis)).length;
-
-  const growthMap = new Map<string, number>();
-  let initialCount = subscribers.filter(s => s.createdAt && new Date(s.createdAt) < cutoffDate).length;
-
-  filteredSubscribers.forEach(s => {
-    if (s.createdAt) {
-      const dateStr = new Date(s.createdAt).toISOString().split('T')[0];
-      growthMap.set(dateStr, (growthMap.get(dateStr) || 0) + 1);
-    }
-  });
-  
-  const sortedDates = Array.from(growthMap.keys()).sort();
-  let cumulative = initialCount;
-  const growthData = sortedDates.map(date => {
-    cumulative += growthMap.get(date)!;
-    return { date, count: cumulative };
-  });
-
-  if (growthData.length === 0 && timeFilter !== 'all') {
-     growthData.push({ date: cutoffDate.toISOString().split('T')[0], count: initialCount });
-     growthData.push({ date: now.toISOString().split('T')[0], count: initialCount });
-  }
-
-  const rolesMap = new Map<string, number>();
-  subscribers.forEach(s => {
-    const roleName = s.role ? s.role : (s.isAdmin ? 'Admin' : 'User');
-    rolesMap.set(roleName, (rolesMap.get(roleName) || 0) + 1);
-  });
-  const rolesData = Array.from(rolesMap.entries()).map(([name, value]) => ({ name, value }));
-  const PIE_COLORS = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#64748b'];
-
   return (
     <div className="app-container animate-in">
       <nav className="top-nav">
@@ -575,97 +504,12 @@ CRITICAL RULES YOU MUST STRICTLY FOLLOW:
         <>
 
       {/* --- Analytics & Metrics Section --- */}
-      <div style={{ marginBottom: '2rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-          <h2 style={{ margin: 0 }}>Marketing & Analytics</h2>
-          <select 
-            className="input-field" 
-            style={{ width: 'auto', margin: 0, padding: '0.25rem 0.5rem', background: 'var(--bg-panel)' }}
-            value={timeFilter}
-            onChange={(e) => setTimeFilter(e.target.value as any)}
-          >
-            <option value="all">All Time</option>
-            <option value="week">1 Week</option>
-            <option value="month">1 Month</option>
-            <option value="quarter">1 Quarter (3 Months)</option>
-            <option value="semi-annual">Semi-Annual (6 Months)</option>
-            <option value="year">1 Year</option>
-          </select>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
-          <div className="glass-panel" style={{ padding: '1.5rem', textAlign: 'center' }}>
-            <h3 style={{ margin: '0 0 0.5rem 0', color: 'var(--text-muted)' }}>Total Subscribers</h3>
-            <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: 'var(--accent-color)' }}>{totalSubscribers}</div>
-          </div>
-          <div className="glass-panel" style={{ padding: '1.5rem', textAlign: 'center' }}>
-            <h3 style={{ margin: '0 0 0.5rem 0', color: 'var(--text-muted)' }}>Signups ({periodLabel})</h3>
-            <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: '#10b981' }}>{newSubscribers}</div>
-          </div>
-          <div className="glass-panel" style={{ padding: '1.5rem', textAlign: 'center' }}>
-            <h3 style={{ margin: '0 0 0.5rem 0', color: 'var(--text-muted)' }}>Active Admins</h3>
-            <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: '#8b5cf6' }}>{activeAdmins}</div>
-          </div>
-          <div className="glass-panel" style={{ padding: '1.5rem', textAlign: 'center' }}>
-            <h3 style={{ margin: '0 0 0.5rem 0', color: 'var(--text-muted)' }}>AI Incidents (Recent)</h3>
-            <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: incidents.length > 0 ? '#ef4444' : '#10b981' }}>{incidents.length}</div>
-          </div>
-        </div>
-
-        <div className="dashboard-grid">
-          <div className="glass-panel">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
-              <TrendingUp color="var(--accent-color)" />
-              <h3 style={{ margin: 0 }}>Subscriber Growth</h3>
-            </div>
-            <div style={{ height: '300px', width: '100%' }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={growthData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                  <XAxis dataKey="date" stroke="var(--text-muted)" fontSize={12} />
-                  <YAxis stroke="var(--text-muted)" fontSize={12} allowDecimals={false} />
-                  <RechartsTooltip 
-                    contentStyle={{ backgroundColor: 'var(--bg-panel)', border: '1px solid var(--border-color)', borderRadius: '8px' }} 
-                    itemStyle={{ color: 'var(--text-color)' }}
-                  />
-                  <Line type="monotone" dataKey="count" stroke="var(--accent-color)" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          <div className="glass-panel">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
-              <PieChartIcon color="var(--accent-color)" />
-              <h3 style={{ margin: 0 }}>Roles Distribution</h3>
-            </div>
-            <div style={{ height: '300px', width: '100%' }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={rolesData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={100}
-                    paddingAngle={5}
-                    dataKey="value"
-                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                    labelLine={false}
-                  >
-                    {rolesData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <RechartsTooltip 
-                    contentStyle={{ backgroundColor: 'var(--bg-panel)', border: '1px solid var(--border-color)', borderRadius: '8px' }}
-                    itemStyle={{ color: 'var(--text-color)' }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        </div>
-      </div>
+      <AnalyticsDashboard 
+        subscribers={subscribers} 
+        incidents={incidents} 
+        timeFilter={timeFilter} 
+        setTimeFilter={setTimeFilter} 
+      />
 
       <div className="dashboard-grid">
         {/* Left Column: AI Config */}
@@ -849,78 +693,16 @@ CRITICAL RULES YOU MUST STRICTLY FOLLOW:
           </div>
           
           {/* AI Incident Reports */}
-          <div style={{ marginTop: '2.5rem', paddingTop: '1.5rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-            <h3 style={{ marginBottom: '1rem', color: 'var(--text-color)' }}>AI Incident Reports</h3>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
-              Shows recent AI provider failures, API errors, or rate limits.
-            </p>
-            {incidents.length === 0 ? (
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>No incidents recorded recently.</p>
-            ) : (
-              <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                {incidents.map((incident) => (
-                  <li key={incident.id} style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '8px', padding: '0.75rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
-                      <span style={{ fontWeight: 'bold', color: '#ef4444' }}>{incident.providerId} ({incident.type})</span>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{new Date(incident.timestamp).toLocaleString()}</span>
-                    </div>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--text-color)', marginBottom: '0.25rem' }}>
-                      <strong>Error:</strong> {incident.error}
-                    </div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Source: {incident.source}</div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+          <AIIncidentReports incidents={incidents} />
         </div>
 
         {/* Right Column: Subscribers */}
-        <div className="glass-panel">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem' }}>
-            <Users color="var(--accent-color)" />
-            <h2 style={{ margin: 0 }}>Subscribers ({subscribers.length})</h2>
-          </div>
-
-          <ul className="subscriber-list">
-            {subscribers.map((sub) => {
-              const isExpired = sub.accessExpiresAtMillis && Date.now() > sub.accessExpiresAtMillis;
-              return (
-                <li 
-                  key={sub.id} 
-                  className="subscriber-item" 
-                  style={{ alignItems: 'flex-start', cursor: 'pointer' }}
-                  onClick={() => setSelectedUserProfile(sub)}
-                >
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 600 }}>{sub.email || 'Anonymous User'}</div>
-                    <div style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>ID: {sub.id.substring(0,8)}...</div>
-                    {(sub.role || sub.isAdmin || sub.isDeleted) && (
-                      <div style={{ marginTop: '0.25rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                        {sub.isDeleted && <span className="badge" style={{ backgroundColor: '#ef4444' }}>Deleted</span>}
-                        {sub.isAdmin && !sub.isDeleted && <span className="badge admin" style={{ backgroundColor: isExpired ? '#ef4444' : undefined }}>{isExpired ? 'Expired Admin' : 'Admin'}</span>}
-                        {sub.role && <span className="badge" style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}>{sub.role}</span>}
-                        {sub.accessExpiresAtMillis && (
-                          <span className="badge" style={{ backgroundColor: 'transparent', border: '1px solid var(--border-color)', color: isExpired ? '#ef4444' : 'var(--text-muted)' }}>
-                            Expires: {new Date(sub.accessExpiresAtMillis).toLocaleDateString()}
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  {isSuperadmin && sub.email !== 'mosaicmusic02@gmail.com' && (
-                    <button className="btn" style={{ padding: '0.5rem' }} onClick={(e) => openEditModal(e, sub)}>
-                      <Edit size={16} />
-                    </button>
-                  )}
-                </li>
-              );
-            })}
-            {subscribers.length === 0 && (
-              <p style={{ textAlign: 'center', padding: '2rem 0' }}>No subscribers found.</p>
-            )}
-          </ul>
-        </div>
+        <SubscriberList 
+          subscribers={subscribers} 
+          isSuperadmin={isSuperadmin} 
+          onSelectUser={setSelectedUserProfile} 
+          onEditUser={openEditModal} 
+        />
       </div>
 
       {/* Edit User Modal */}
