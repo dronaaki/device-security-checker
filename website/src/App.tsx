@@ -16,6 +16,7 @@ import { collection, addDoc, doc, getDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from './firebase';
 import { CustomerSupportChat } from './components/CustomerSupportChat';
+import { AnimatedPhoneMockup } from './components/AnimatedPhoneMockup';
 
 function App() {
   const [formState, setFormState] = useState({ name: '', email: '', message: '' });
@@ -178,14 +179,9 @@ function App() {
             </motion.div>
           </motion.div>
 
-          <motion.div 
-            className="hero-image-wrapper mx-auto"
-            initial={{ opacity: 0, y: 100, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ duration: 1.2, ease: "easeOut", delay: 0.2 }}
-          >
-            <img src="/hero.png" alt="Unhackme App on Smartphone" className="hero-image" />
-          </motion.div>
+          <div style={{ marginTop: '3rem' }}>
+            <AnimatedPhoneMockup />
+          </div>
         </div>
       </section>
 
