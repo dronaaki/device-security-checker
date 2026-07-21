@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, type Variants } from 'framer-motion';
 import { 
   ShieldCheck, 
@@ -12,7 +12,7 @@ import {
   Lock,
   Cpu
 } from 'lucide-react';
-import { collection, addDoc } from 'firebase/firestore';
+import { collection, addDoc, doc, getDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from './firebase';
 
@@ -21,6 +21,39 @@ function App() {
   const [formStatus, setFormStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
   const [checkoutStatus, setCheckoutStatus] = useState<'idle' | 'loading' | 'error'>('idle');
   const [checkoutError, setCheckoutError] = useState('');
+
+  const [websiteContent, setWebsiteContent] = useState({
+    heroTitle: 'Your Device. <br />\n<span class="text-gradient">Secured by AI.</span>',
+    heroSubtitle: "Unhackme is the world's most advanced AI-powered Hack Status Checker.\nInstantly detect threats, spy apps, and unauthorized access with zero configuration.",
+    featuresTitle: 'Intelligence inside.',
+    featuresSubtitle: 'A proactive security engine that never sleeps.',
+    features: [
+      { title: 'AI Threat Detection', description: 'Our neural engine scans your device in real-time, identifying complex zero-day malware that traditional antivirus misses.' },
+      { title: 'App Auditing', description: 'Instantly discover apps that are secretly accessing your camera, microphone, or location without your knowledge.' },
+      { title: 'Total Privacy', description: 'All scans are performed on-device or anonymously. We never collect your personal data or browsing history.' }
+    ],
+    downloadTitle: 'Available everywhere.',
+    downloadSubtitle: 'Download Unhackme for your primary devices today.',
+    pricingTitle: 'One price. Complete security.',
+    pricingSubtitle: 'No subscriptions. No hidden fees. Just peace of mind.',
+    pricingPrice: '$29.99',
+    pricingFeatures: ['Lifetime AI updates', 'Protection for up to 3 devices', 'Priority 24/7 support']
+  });
+
+  useEffect(() => {
+    async function loadContent() {
+      try {
+        const docRef = doc(db, 'website_content', 'main');
+        const snapshot = await getDoc(docRef);
+        if (snapshot.exists()) {
+          setWebsiteContent(prev => ({ ...prev, ...snapshot.data() }));
+        }
+      } catch (err) {
+        console.error("Failed to load website content:", err);
+      }
+    }
+    loadContent();
+  }, []);
 
   const handleSupportSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -103,13 +136,9 @@ function App() {
             animate="visible"
             variants={staggerContainer}
           >
-            <motion.h1 variants={fadeInUp}>
-              Your Device. <br />
-              <span className="text-gradient">Secured by AI.</span>
-            </motion.h1>
+            <motion.h1 variants={fadeInUp} dangerouslySetInnerHTML={{ __html: websiteContent.heroTitle }} />
             <motion.p variants={fadeInUp}>
-              Unhackme is the world's most advanced AI-powered Hack Status Checker. 
-              Instantly detect threats, spy apps, and unauthorized access with zero configuration.
+              {websiteContent.heroSubtitle}
             </motion.p>
             <motion.div variants={fadeInUp} className="hero-badges">
               <a href="#download" className="btn btn-primary">
@@ -142,8 +171,8 @@ function App() {
             viewport={{ once: true, margin: "-100px" }}
             variants={fadeInUp}
           >
-            <h2 className="text-gradient">Intelligence inside.</h2>
-            <p className="mx-auto">A proactive security engine that never sleeps.</p>
+            <h2 className="text-gradient">{websiteContent.featuresTitle}</h2>
+            <p className="mx-auto">{websiteContent.featuresSubtitle}</p>
           </motion.div>
 
           <motion.div 
@@ -155,20 +184,20 @@ function App() {
           >
             <motion.div className="card" variants={fadeInUp}>
               <Cpu size={48} color="#06b6d4" style={{ marginBottom: '1.5rem' }} />
-              <h3>AI Threat Detection</h3>
-              <p style={{ fontSize: '1rem' }}>Our neural engine scans your device in real-time, identifying complex zero-day malware that traditional antivirus misses.</p>
+              <h3>{websiteContent.features[0]?.title}</h3>
+              <p style={{ fontSize: '1rem' }}>{websiteContent.features[0]?.description}</p>
             </motion.div>
             
             <motion.div className="card" variants={fadeInUp}>
               <Smartphone size={48} color="#8b5cf6" style={{ marginBottom: '1.5rem' }} />
-              <h3>App Auditing</h3>
-              <p style={{ fontSize: '1rem' }}>Instantly discover apps that are secretly accessing your camera, microphone, or location without your knowledge.</p>
+              <h3>{websiteContent.features[1]?.title}</h3>
+              <p style={{ fontSize: '1rem' }}>{websiteContent.features[1]?.description}</p>
             </motion.div>
 
             <motion.div className="card" variants={fadeInUp}>
               <Lock size={48} color="#f5f5f7" style={{ marginBottom: '1.5rem' }} />
-              <h3>Total Privacy</h3>
-              <p style={{ fontSize: '1rem' }}>All scans are performed on-device or anonymously. We never collect your personal data or browsing history.</p>
+              <h3>{websiteContent.features[2]?.title}</h3>
+              <p style={{ fontSize: '1rem' }}>{websiteContent.features[2]?.description}</p>
             </motion.div>
           </motion.div>
         </div>
@@ -184,8 +213,8 @@ function App() {
             viewport={{ once: true }}
             variants={fadeInUp}
           >
-            <h2>Available everywhere.</h2>
-            <p className="mx-auto">Download Unhackme for your primary devices today.</p>
+            <h2>{websiteContent.downloadTitle}</h2>
+            <p className="mx-auto">{websiteContent.downloadSubtitle}</p>
           </motion.div>
 
           <motion.div 
@@ -249,8 +278,8 @@ function App() {
             viewport={{ once: true }}
             variants={fadeInUp}
           >
-            <h2>One price. Complete security.</h2>
-            <p className="mx-auto">No subscriptions. No hidden fees. Just peace of mind.</p>
+            <h2>{websiteContent.pricingTitle}</h2>
+            <p className="mx-auto">{websiteContent.pricingSubtitle}</p>
           </motion.div>
 
           <motion.div 
@@ -261,18 +290,14 @@ function App() {
             className="form-container"
             style={{ marginTop: '3rem', textAlign: 'center' }}
           >
-            <h3 style={{ fontSize: '3rem', marginBottom: '1rem' }}>$29.99<span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>/lifetime</span></h3>
+            <h3 style={{ fontSize: '3rem', marginBottom: '1rem' }}>{websiteContent.pricingPrice}<span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>/lifetime</span></h3>
             
             <ul style={{ listStyle: 'none', padding: 0, margin: '2rem 0', textAlign: 'left', display: 'inline-block' }}>
-              <li style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <CheckCircle2 color="#06b6d4" size={20} /> Lifetime AI updates
-              </li>
-              <li style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <CheckCircle2 color="#06b6d4" size={20} /> Protection for up to 3 devices
-              </li>
-              <li style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <CheckCircle2 color="#06b6d4" size={20} /> Priority 24/7 support
-              </li>
+              {websiteContent.pricingFeatures.map((feat, idx) => (
+                <li key={idx} style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <CheckCircle2 color="#06b6d4" size={20} /> {feat}
+                </li>
+              ))}
             </ul>
 
             <button 

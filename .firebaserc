@@ -2,6 +2,17 @@
   "projects": {
     "default": "device-sec-checker-2026"
   },
-  "targets": {},
+  "targets": {
+    "device-sec-checker-2026": {
+      "hosting": {
+        "admin": [
+          "device-sec-checker-2026"
+        ],
+        "website": [
+          "unhackme-website-2026"
+        ]
+      }
+    }
+  },
   "etags": {}
 }

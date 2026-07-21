@@ -10,9 +10,10 @@ import { SubscriberList } from './SubscriberList';
 import { PaymentsDashboard } from './PaymentsDashboard';
 import { AccountingDashboard } from './AccountingDashboard';
 import { AdminAssistant } from './AdminAssistant';
+import { WebsiteEditor } from './WebsiteEditor';
 
 export function Dashboard() {
-  const [activeTab, setActiveTab] = useState<'general' | 'payments' | 'accounting'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'payments' | 'accounting' | 'website'>('general');
   const [subscribers, setSubscribers] = useState<any[]>([]);
   const [incidents, setIncidents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -94,8 +95,10 @@ CRITICAL RULES YOU MUST STRICTLY FOLLOW:
       if (!auth.currentUser) return;
       
       try {
-        // 1. Verify Admin Status
-        const superadminCheck = auth.currentUser.email === 'mosaicmusic02@gmail.com';
+        // 1. Verify Admin Status (via Firebase custom claims)
+        const idTokenResult = await auth.currentUser.getIdTokenResult(true);
+        const superadminCheck = idTokenResult.claims.superadmin === true;
+        
         const userDocRef = doc(db, 'users', auth.currentUser.uid);
         const userDoc = await getDoc(userDocRef);
         
@@ -247,6 +250,8 @@ CRITICAL RULES YOU MUST STRICTLY FOLLOW:
       targetUrl = (baseUrl || 'https://api.openai.com/v1/chat/completions').replace(/\/+$/, '');
     }
 
+    const finalSystemPrompt = systemPrompt + "\n\nIMPORTANT: Output your response in plain text ONLY. Do NOT use Markdown, bold text, italics, headers, or bullet points. Use standard text formatting.";
+
     let bodyPayload: any = {};
     let customHeaders: any = { 'Content-Type': 'application/json' };
 
@@ -256,7 +261,7 @@ CRITICAL RULES YOU MUST STRICTLY FOLLOW:
       bodyPayload = {
         model: model || 'claude-3-haiku-20240307',
         max_tokens: maxTokens,
-        system: systemPrompt,
+        system: finalSystemPrompt,
         messages: [{ role: 'user', content: promptText }]
       };
     } else if (providerId === 'ollama') {
@@ -264,14 +269,14 @@ CRITICAL RULES YOU MUST STRICTLY FOLLOW:
         model: model || 'llama3.2:3b',
         stream: false,
         messages: [
-          { role: 'system', content: systemPrompt },
+          { role: 'system', content: finalSystemPrompt },
           { role: 'user', content: promptText }
         ]
       };
     } else if (providerId === 'gemini') {
       bodyPayload = {
         contents: [{ parts: [{ text: promptText }] }],
-        systemInstruction: { parts: [{ text: systemPrompt }] }
+        systemInstruction: { parts: [{ text: finalSystemPrompt }] }
       };
     } else {
       if (apiKey) customHeaders['Authorization'] = `Bearer ${apiKey}`;
@@ -289,7 +294,7 @@ CRITICAL RULES YOU MUST STRICTLY FOLLOW:
       bodyPayload = {
         model: model || defaultModel,
         messages: [
-          { role: 'system', content: systemPrompt },
+          { role: 'system', content: finalSystemPrompt },
           { role: 'user', content: promptText }
         ]
       };
@@ -552,6 +557,28 @@ CRITICAL RULES YOU MUST STRICTLY FOLLOW:
                 Accounting & Finance
               </button>
             )}
+
+            {isAdmin && (
+              <button 
+                onClick={() => setActiveTab('website')}
+                style={{ 
+                  background: 'transparent', 
+                  border: 'none', 
+                  padding: '1rem 1.5rem', 
+                  color: activeTab === 'website' ? 'var(--text-main)' : 'var(--text-muted)', 
+                  cursor: 'pointer',
+                  fontWeight: activeTab === 'website' ? 600 : 400,
+                  fontSize: '0.95rem',
+                  borderBottom: activeTab === 'website' ? '2px solid var(--accent-color)' : '2px solid transparent',
+                  transition: 'all 0.2s',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem'
+                }}
+              >
+                Website CMS
+              </button>
+            )}
           </div>
         </div>
         <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: '1rem' }}>
@@ -585,6 +612,8 @@ CRITICAL RULES YOU MUST STRICTLY FOLLOW:
         <PaymentsDashboard />
       ) : activeTab === 'accounting' && isSuperadmin ? (
         <AccountingDashboard />
+      ) : activeTab === 'website' ? (
+        <WebsiteEditor />
       ) : (
         <>
 

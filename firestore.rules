@@ -5,7 +5,7 @@ service cloud.firestore {
     
     // Check if user is the Superadmin
     function isSuperadmin() {
-      return request.auth != null && request.auth.token.email == 'mosaicmusic02@gmail.com';
+      return request.auth != null && request.auth.token.superadmin == true;
     }
 
     // Check if user is a valid active admin
@@ -54,10 +54,14 @@ service cloud.firestore {
       allow read, write: if isSuperadmin() || (isActiveAdmin() && isNotDeleted(request.auth.uid));
     }
 
-    // AI Incidents collection: any authenticated user can write (mobile app logs failures),
-    // but only admins can read the incident reports.
+    // AI Incidents collection: any authenticated user can create (mobile app logs failures),
+    // but validate shape and limit size to prevent Firestore abuse.
     match /ai_incidents/{incidentId} {
-      allow create: if request.auth != null;
+      allow create: if request.auth != null
+                    && request.resource.data.keys().hasAll(['timestamp', 'providerId', 'type', 'error', 'source'])
+                    && request.resource.data.keys().size() <= 6
+                    && request.resource.data.error is string
+                    && request.resource.data.error.size() < 2000;
       allow read, delete: if isSuperadmin() || isActiveAdmin();
     }
 
@@ -65,6 +69,36 @@ service cloud.firestore {
     match /transactions/{transactionId} {
       allow read: if isSuperadmin() || isActiveAdmin();
       allow write: if isSuperadmin();
+    }
+
+    // Support tickets: public website can create (no auth required for support form),
+    // but validate the schema tightly to prevent abuse.
+    match /support_tickets/{ticketId} {
+      allow create: if request.resource.data.keys().hasAll(['name', 'email', 'message', 'timestamp', 'source'])
+                    && request.resource.data.keys().size() <= 5
+                    && request.resource.data.name is string
+                    && request.resource.data.name.size() > 0
+                    && request.resource.data.name.size() < 200
+                    && request.resource.data.email is string
+                    && request.resource.data.email.size() > 0
+                    && request.resource.data.email.size() < 200
+                    && request.resource.data.message is string
+                    && request.resource.data.message.size() > 0
+                    && request.resource.data.message.size() < 5000
+                    && request.resource.data.source is string;
+      allow read, update, delete: if isSuperadmin() || isActiveAdmin();
+    }
+
+    // Website Content collection: public read, admin write
+    match /website_content/{document=**} {
+      allow read: if true;
+      allow write: if isSuperadmin() || isActiveAdmin();
+    }
+
+    // Rate limits collection: managed exclusively by Cloud Functions (admin SDK).
+    // No client should read or write these directly.
+    match /rate_limits/{docId} {
+      allow read, write: if false;
     }
   }
 }

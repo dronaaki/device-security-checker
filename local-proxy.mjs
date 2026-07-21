@@ -50,9 +50,12 @@ app.post('/proxy', async (req, res) => {
     });
     
     const data = await response.json();
+    console.log(`[Proxy] POST ${url} - Status: ${response.status}`);
     if (!response.ok) {
+      console.log(`[Proxy Error]`, data);
       return res.status(response.status).json(data);
     }
+    console.log(`[Proxy Success]`, JSON.stringify(data).substring(0, 200) + '...');
     res.json(data);
   } catch (error) {
     res.status(500).json({ error: error.message });

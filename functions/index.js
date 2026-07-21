@@ -1,13 +1,39 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
-const { getFirestore } = require("firebase-admin/firestore");
+const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const admin = require("firebase-admin");
-const cors = require("cors")({ origin: true });
 
 admin.initializeApp();
 const db = getFirestore();
 
+// --- Security: Allowed origins for payment redirects ---
+const ALLOWED_ORIGINS = [
+  'https://unhackme-website-2026.web.app',
+  'https://unhackme-website-2026.firebaseapp.com',
+  'http://localhost:5173', // dev only — remove before production
+];
+
+// --- Security: Per-user rate limiter (Firestore-backed) ---
+async function checkRateLimit(uid, action, maxCalls, windowMs) {
+  const ref = db.collection('rate_limits').doc(`${uid}_${action}`);
+  const snap = await ref.get();
+  const now = Date.now();
+
+  if (snap.exists) {
+    const data = snap.data();
+    if (data.windowStart && (now - data.windowStart) < windowMs) {
+      if (data.count >= maxCalls) {
+        throw new HttpsError('resource-exhausted', 'Too many requests. Please wait a moment and try again.');
+      }
+      await ref.update({ count: FieldValue.increment(1) });
+    } else {
+      await ref.set({ windowStart: now, count: 1 });
+    }
+  } else {
+    await ref.set({ windowStart: now, count: 1 });
+  }
+}
+
 exports.chatWithAI = onCall({
-  cors: true,
   maxInstances: 10
 }, async (request) => {
   // 1. Verify user is authenticated
@@ -20,6 +46,9 @@ exports.chatWithAI = onCall({
   if (!testPrompt && !testMessages) {
     throw new HttpsError('invalid-argument', 'You must provide a prompt or messages array.');
   }
+
+  // Rate limit: max 20 AI calls per minute per user
+  await checkRateLimit(request.auth.uid, 'chatWithAI', 20, 60000);
 
   // 2. Securely fetch AI configuration
   let config;
@@ -111,22 +140,34 @@ exports.chatWithAI = onCall({
 
     return { text: responseText };
 
+
   } catch (err) {
     console.error("AI API Error:", err);
-    throw new HttpsError('internal', err.message || err.toString());
+    // Security: never leak internal error details to the client
+    if (err instanceof HttpsError) throw err;
+    throw new HttpsError('internal', 'The AI service encountered an error. Please try again later.');
   }
 });
 
 exports.createCheckoutSession = onCall({
-  cors: true,
   maxInstances: 10
 }, async (request) => {
-  const origin = request.rawRequest?.headers?.origin || "http://localhost:5173";
-  
+  // Security (C1): Require authentication
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'You must be logged in to make a purchase.');
+  }
+
+  // Security: Validate and restrict redirect origin
+  const rawOrigin = request.rawRequest?.headers?.origin;
+  const origin = ALLOWED_ORIGINS.includes(rawOrigin) ? rawOrigin : ALLOWED_ORIGINS[0];
+
+  // Rate limit: max 5 checkout sessions per minute per user
+  await checkRateLimit(request.auth.uid, 'checkout', 5, 60000);
+
   try {
     const configDoc = await db.collection("config").doc("payment_provider").get();
     if (!configDoc.exists) {
-      throw new HttpsError('failed-precondition', 'Payment configuration not found.');
+      throw new HttpsError('failed-precondition', 'Payment is not configured yet. Please contact support.');
     }
     const config = configDoc.data();
     
@@ -135,7 +176,7 @@ exports.createCheckoutSession = onCall({
     }
 
     if (!config.stripeSecretKey) {
-      throw new HttpsError('failed-precondition', 'Stripe Secret Key is missing in configuration.');
+      throw new HttpsError('failed-precondition', 'Payment processing is temporarily unavailable.');
     }
 
     const stripe = require('stripe')(config.stripeSecretKey);
@@ -156,6 +197,9 @@ exports.createCheckoutSession = onCall({
         },
       ],
       mode: 'payment',
+      // Security: tie checkout to the authenticated user
+      client_reference_id: request.auth.uid,
+      customer_email: request.auth.token.email || undefined,
       success_url: `${origin}/?success=true`,
       cancel_url: `${origin}/?canceled=true`,
     });
@@ -163,7 +207,8 @@ exports.createCheckoutSession = onCall({
     return { url: session.url };
   } catch (err) {
     console.error("Checkout Session Error:", err);
-    throw new HttpsError('internal', err.message || err.toString());
+    if (err instanceof HttpsError) throw err;
+    throw new HttpsError('internal', 'Payment processing failed. Please try again later.');
   }
 });
 

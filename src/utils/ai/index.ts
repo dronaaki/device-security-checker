@@ -153,106 +153,13 @@ export function createConfiguredProvider(): AIProvider {
   return provider;
 }
 
+import { createCloudFunctionProvider } from './providers/cloud-function';
+
 /**
- * Builds the configured provider from Firestore config/ai_provider.
+ * Builds the provider. In production, this uses the secure Cloud Function backend
+ * so API keys are never exposed to the client device.
  */
 export async function createProviderFromFirestore(): Promise<AIProvider> {
-  let id = process.env.EXPO_PUBLIC_AI_PROVIDER ?? 'ollama';
-  let model = process.env.EXPO_PUBLIC_AI_MODEL ?? DEFAULT_MODELS[id];
-  let baseUrl = process.env.EXPO_PUBLIC_AI_BASE_URL || undefined;
-  let apiKey = process.env.EXPO_PUBLIC_AI_API_KEY || undefined;
-  
-  let enableFallback = false;
-  let fallbackId = 'mistral';
-  let fallbackModel = '';
-  let fallbackBaseUrl: string | undefined = undefined;
-  let fallbackApiKey: string | undefined = undefined;
-
-  try {
-    const configDoc = await getDoc(doc(db, 'config', 'ai_provider'));
-    if (configDoc.exists()) {
-      const data = configDoc.data();
-      if (data.providerId) id = data.providerId;
-      if (data.model) model = data.model;
-      if (data.baseUrl) baseUrl = data.baseUrl;
-      if (data.apiKey) apiKey = data.apiKey;
-      
-      if (data.enableFallback) {
-        enableFallback = true;
-        if (data.fallbackProviderId) fallbackId = data.fallbackProviderId;
-        if (data.fallbackModel) fallbackModel = data.fallbackModel;
-        if (data.fallbackBaseUrl) fallbackBaseUrl = data.fallbackBaseUrl;
-        if (data.fallbackApiKey) fallbackApiKey = data.fallbackApiKey;
-      }
-    }
-  } catch (error) {
-    console.warn("Could not fetch AI config from Firestore, falling back to env", error);
-  }
-
-  const factory = AI_PROVIDERS[id];
-  if (!factory) {
-    throw new AIConfigError(`Unknown AI provider "${id}".`);
-  }
-
-  const config: AIProviderConfig = { model, baseUrl, apiKey };
-  const primaryProvider = factory(config);
-
-  if (primaryProvider.requiresApiKey && !config.apiKey && !config.baseUrl) {
-    throw new AIConfigError(
-      `${primaryProvider.label} needs an API key. Please configure it in the Admin Dashboard.`
-    );
-  }
-
-  // If fallback is not enabled or not configured, return the primary provider directly.
-  if (!enableFallback) {
-    return primaryProvider;
-  }
-
-  const fallbackFactory = AI_PROVIDERS[fallbackId];
-  if (!fallbackFactory) {
-    console.warn(`Unknown fallback provider "${fallbackId}". Ignoring fallback.`);
-    return primaryProvider;
-  }
-
-  const fallbackProvider = fallbackFactory({
-    model: fallbackModel || DEFAULT_MODELS[fallbackId] || '',
-    baseUrl: fallbackBaseUrl,
-    apiKey: fallbackApiKey
-  });
-
-  const logIncident = async (pid: string, type: 'primary' | 'fallback', err: any) => {
-    try {
-      await addDoc(collection(db, 'ai_incidents'), {
-        timestamp: new Date().toISOString(),
-        providerId: pid,
-        type,
-        error: err.message || err.toString(),
-        source: 'mobile-app'
-      });
-    } catch (e) {
-      console.warn("Failed to log AI incident to Firestore:", e);
-    }
-  };
-
-  // Return a composite provider that catches errors and tries the fallback
-  return {
-    id: primaryProvider.id,
-    label: primaryProvider.label + ' (with Fallback)',
-    requiresApiKey: primaryProvider.requiresApiKey,
-    async complete(request) {
-      try {
-        return await primaryProvider.complete(request);
-      } catch (err: any) {
-        logIncident(primaryProvider.id, 'primary', err);
-        console.warn(`Primary AI (${primaryProvider.label}) failed: ${err.message}. Retrying with fallback (${fallbackProvider.label})...`);
-        
-        try {
-          return await fallbackProvider.complete(request);
-        } catch (fbErr: any) {
-          logIncident(fallbackProvider.id, 'fallback', fbErr);
-          throw fbErr;
-        }
-      }
-    }
-  };
+  const factory = createCloudFunctionProvider();
+  return factory({ model: 'cloud' });
 }

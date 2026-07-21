@@ -84,12 +84,32 @@ export function AdminAssistant({ subscribers, incidents }: AdminAssistantProps) 
     } else if (providerId === 'gemini') {
       const cleanModel = (model || 'gemini-1.5-flash').replace(/^models\//, '').trim();
       targetUrl = (baseUrl || `https://generativelanguage.googleapis.com/v1beta/models/${cleanModel}:generateContent?key=${apiKey}`).replace(/\/+$/, '');
+    } else if (providerId === 'groq') {
+      targetUrl = (baseUrl || 'https://api.groq.com/openai/v1/chat/completions').replace(/\/+$/, '');
+    } else if (providerId === 'mistral') {
+      targetUrl = (baseUrl || 'https://api.mistral.ai/v1/chat/completions').replace(/\/+$/, '');
+    } else if (providerId === 'deepseek') {
+      targetUrl = (baseUrl || 'https://api.deepseek.com/v1/chat/completions').replace(/\/+$/, '');
+    } else if (providerId === 'qwen') {
+      targetUrl = (baseUrl || 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions').replace(/\/+$/, '');
+    } else if (providerId === 'zhipu') {
+      targetUrl = (baseUrl || 'https://open.bigmodel.cn/api/paas/v4/chat/completions').replace(/\/+$/, '');
+    } else if (providerId === 'moonshot') {
+      targetUrl = (baseUrl || 'https://api.moonshot.cn/v1/chat/completions').replace(/\/+$/, '');
+    } else if (providerId === 'baichuan') {
+      targetUrl = (baseUrl || 'https://api.baichuan-ai.com/v1/chat/completions').replace(/\/+$/, '');
+    } else if (providerId === 'yi') {
+      targetUrl = (baseUrl || 'https://api.01.ai/v1/chat/completions').replace(/\/+$/, '');
+    } else if (providerId === 'openrouter') {
+      targetUrl = (baseUrl || 'https://openrouter.ai/api/v1/chat/completions').replace(/\/+$/, '');
     } else {
       targetUrl = (baseUrl || 'https://api.openai.com/v1/chat/completions').replace(/\/+$/, '');
     }
 
     let bodyPayload: any = {};
     let customHeaders: any = { 'Content-Type': 'application/json' };
+
+    const apiMessages = messages.filter((m, i) => !(i === 0 && m.role === 'assistant'));
 
     if (providerId === 'anthropic') {
       customHeaders['anthropic-version'] = '2023-06-01';
@@ -98,7 +118,7 @@ export function AdminAssistant({ subscribers, incidents }: AdminAssistantProps) 
         model: model || 'claude-3-haiku-20240307',
         max_tokens: 1024,
         system: contextMessage,
-        messages: [...messages, { role: 'user', content: promptText }]
+        messages: [...apiMessages, { role: 'user', content: promptText }]
       };
     } else if (providerId === 'ollama') {
       bodyPayload = {
@@ -106,12 +126,12 @@ export function AdminAssistant({ subscribers, incidents }: AdminAssistantProps) 
         stream: false,
         messages: [
           { role: 'system', content: contextMessage },
-          ...messages,
+          ...apiMessages,
           { role: 'user', content: promptText }
         ]
       };
     } else if (providerId === 'gemini') {
-      const formattedHistory = messages.map(m => ({
+      const formattedHistory = apiMessages.map(m => ({
         role: m.role === 'assistant' ? 'model' : 'user',
         parts: [{ text: m.content }]
       }));
@@ -121,11 +141,22 @@ export function AdminAssistant({ subscribers, incidents }: AdminAssistantProps) 
       };
     } else {
       if (apiKey) customHeaders['Authorization'] = `Bearer ${apiKey}`;
+      
+      let defaultModel = 'gpt-3.5-turbo';
+      if (providerId === 'groq') defaultModel = 'llama3-8b-8192';
+      if (providerId === 'mistral') defaultModel = 'mistral-tiny';
+      if (providerId === 'deepseek') defaultModel = 'deepseek-chat';
+      if (providerId === 'qwen') defaultModel = 'qwen-max';
+      if (providerId === 'zhipu') defaultModel = 'glm-4';
+      if (providerId === 'moonshot') defaultModel = 'moonshot-v1-8k';
+      if (providerId === 'baichuan') defaultModel = 'Baichuan4';
+      if (providerId === 'yi') defaultModel = 'yi-large';
+      
       bodyPayload = {
-        model: model || 'gpt-3.5-turbo',
+        model: model || defaultModel,
         messages: [
           { role: 'system', content: contextMessage },
-          ...messages,
+          ...apiMessages,
           { role: 'user', content: promptText }
         ]
       };
@@ -143,9 +174,15 @@ export function AdminAssistant({ subscribers, incidents }: AdminAssistantProps) 
 
     if (!res.ok) {
       const errorText = await res.text();
-      throw new Error(errorText);
+      let errorJson;
+      try { errorJson = JSON.parse(errorText); } catch(e) {}
+      throw new Error(errorJson?.error?.message || errorJson?.error || errorText);
     }
     const data = await res.json();
+    
+    if (data.error) {
+      throw new Error(data.error.message || JSON.stringify(data.error));
+    }
     
     if (providerId === 'anthropic') return data?.content?.[0]?.text;
     if (providerId === 'ollama') return data?.message?.content;
@@ -178,6 +215,8 @@ ${JSON.stringify(incidents.slice(0, 10), null, 2)}
 
 Use this data to answer the admin's questions accurately. If they ask about trends, summarize the provided data.
 Keep your answers concise, professional, and helpful.
+
+IMPORTANT: Output your response in plain text ONLY. Do NOT use Markdown, bold text, italics, headers, or bullet points. Use standard text formatting.
       `.trim();
 
       const responseText = await fetchAI(userMessage, contextMessage);
@@ -214,10 +253,19 @@ Keep your answers concise, professional, and helpful.
             <div>
               <label className="input-label">Provider</label>
               <select className="input-field" value={providerId} onChange={(e) => setProviderId(e.target.value)}>
-                <option value="openai">OpenAI</option>
-                <option value="anthropic">Anthropic (Claude)</option>
                 <option value="gemini">Google Gemini</option>
                 <option value="ollama">Ollama (Local)</option>
+                <option value="anthropic">Anthropic (Claude)</option>
+                <option value="openai">OpenAI</option>
+                <option value="openrouter">OpenRouter</option>
+                <option value="groq">Groq</option>
+                <option value="mistral">Mistral AI</option>
+                <option value="deepseek">DeepSeek</option>
+                <option value="qwen">Qwen (Alibaba)</option>
+                <option value="zhipu">Zhipu (GLM)</option>
+                <option value="moonshot">Moonshot (Kimi)</option>
+                <option value="baichuan">Baichuan</option>
+                <option value="yi">Yi (01.AI)</option>
               </select>
             </div>
             <div>
