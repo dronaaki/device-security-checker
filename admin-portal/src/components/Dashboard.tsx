@@ -7,8 +7,11 @@ import { UserProfileView } from './UserProfileView';
 import { AnalyticsDashboard } from './AnalyticsDashboard';
 import { AIIncidentReports } from './AIIncidentReports';
 import { SubscriberList } from './SubscriberList';
+import { PaymentsDashboard } from './PaymentsDashboard';
+import { AccountingDashboard } from './AccountingDashboard';
 
 export function Dashboard() {
+  const [activeTab, setActiveTab] = useState<'general' | 'payments' | 'accounting'>('general');
   const [subscribers, setSubscribers] = useState<any[]>([]);
   const [incidents, setIncidents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -487,11 +490,65 @@ CRITICAL RULES YOU MUST STRICTLY FOLLOW:
               {aiStatus}
             </span>
           </div>
-          <p style={{ margin: 0 }}>Logged in as {auth.currentUser?.email} {isSuperadmin ? '(Superadmin)' : '(Admin)'}</p>
+          <div style={{ display: 'flex', gap: '1.5rem', marginTop: '0.5rem' }}>
+            <button 
+              onClick={() => setActiveTab('general')}
+              style={{ 
+                background: 'transparent', 
+                border: 'none', 
+                color: activeTab === 'general' ? 'var(--text-main)' : 'var(--text-muted)', 
+                fontSize: '1rem', 
+                fontWeight: activeTab === 'general' ? 600 : 400,
+                cursor: 'pointer',
+                borderBottom: activeTab === 'general' ? '2px solid var(--accent-color)' : '2px solid transparent',
+                paddingBottom: '0.25rem',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              General Dashboard
+            </button>
+            <button 
+              onClick={() => setActiveTab('payments')}
+              style={{ 
+                background: 'transparent', 
+                border: 'none', 
+                color: activeTab === 'payments' ? 'var(--text-main)' : 'var(--text-muted)', 
+                fontSize: '1rem', 
+                fontWeight: activeTab === 'payments' ? 600 : 400,
+                cursor: 'pointer',
+                borderBottom: activeTab === 'payments' ? '2px solid var(--accent-color)' : '2px solid transparent',
+                paddingBottom: '0.25rem',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              Payment Systems
+            </button>
+            {isSuperadmin && (
+              <button 
+                onClick={() => setActiveTab('accounting')}
+                style={{ 
+                  background: 'transparent', 
+                  border: 'none', 
+                  color: activeTab === 'accounting' ? 'var(--text-main)' : 'var(--text-muted)', 
+                  fontSize: '1rem', 
+                  fontWeight: activeTab === 'accounting' ? 600 : 400,
+                  cursor: 'pointer',
+                  borderBottom: activeTab === 'accounting' ? '2px solid var(--accent-color)' : '2px solid transparent',
+                  paddingBottom: '0.25rem',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                Accounting & Finance
+              </button>
+            )}
+          </div>
         </div>
-        <button className="btn" onClick={() => auth.signOut()} style={{ background: 'transparent', border: '1px solid var(--border-color)' }}>
-          <LogOut size={18} /> Sign Out
-        </button>
+        <div style={{ textAlign: 'right' }}>
+          <p style={{ margin: 0, marginBottom: '0.5rem' }}>Logged in as {auth.currentUser?.email} {isSuperadmin ? '(Superadmin)' : '(Admin)'}</p>
+          <button className="btn" onClick={() => auth.signOut()} style={{ background: 'transparent', border: '1px solid var(--border-color)', padding: '0.5rem 1rem' }}>
+            <LogOut size={16} /> Sign Out
+          </button>
+        </div>
       </nav>
 
       {selectedUserProfile ? (
@@ -503,6 +560,10 @@ CRITICAL RULES YOU MUST STRICTLY FOLLOW:
             setSelectedUserProfile(u);
           }}
         />
+      ) : activeTab === 'payments' ? (
+        <PaymentsDashboard />
+      ) : activeTab === 'accounting' && isSuperadmin ? (
+        <AccountingDashboard />
       ) : (
         <>
 
