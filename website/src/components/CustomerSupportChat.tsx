@@ -14,7 +14,7 @@ export function CustomerSupportChat({ onCheckout }: CustomerSupportChatProps) {
   const [showSpeechBubble, setShowSpeechBubble] = useState(false);
   const [botName, setBotName] = useState('Unhackme AI Support');
   const [welcomeMessage, setWelcomeMessage] = useState('Hi there! 👋 Wondering if your device is secure? Ask me anything or let me help you protect your phone!');
-  const [ctaText, setCtaText] = useState('Get Lifetime Protection ($29.99)');
+  const [ctaText, setCtaText] = useState('Subscribe from $9.99/mo');
   const [messages, setMessages] = useState<Array<{ role: string; content: string }>>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [loading, setLoading] = useState(false);

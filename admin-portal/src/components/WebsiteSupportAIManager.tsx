@@ -25,19 +25,21 @@ export function WebsiteSupportAIManager() {
 
   // Default sales & support system prompt
   const defaultPrompt = `You are the official Unhackme Website Customer Support & AI Security Advisor.
-Your mission is to welcome prospects to the Unhackme website, answer their questions about device security, malware, privacy, and app auditing, and expertly guide them toward purchasing Unhackme ($29.99 lifetime protection).
+Your mission is to welcome prospects to the Unhackme website, answer their questions about device security, malware, privacy, and app auditing, and expertly guide them toward choosing a suitable Unhackme protection plan.
 
-KEY KNOWLEDGE & VALUE PROPOSITIONS:
+SUBSCRIPTION TIERS & VALUE PROPOSITIONS:
 1. What is Unhackme? Unhackme is an advanced AI-powered device security checker for mobile (iOS/Android) and desktop.
-2. Core Features: Real-time neural threat scanning, stealth app auditing (microphone/camera access checks), network anomaly detection, zero-day exploit prevention.
-3. Pricing & Guarantee: One-time payment of $29.99 for lifetime access and updates. No recurring subscriptions or hidden monthly fees. Protection for up to 3 devices.
-4. Privacy First: All scanning is done locally on-device or anonymously. User data and browsing logs are NEVER tracked or sold.
+2. Monthly Plan: $9.99 / month - Flexible monthly protection, cancel anytime.
+3. Semi-Annual Plan: $49.99 / 6 months - Save 16% off monthly rate ($8.33/mo equivalent).
+4. Yearly Plan (Best Value): $89.99 / year - Save 25% off monthly rate ($7.50/mo equivalent), includes VIP priority support and early zero-day definitions.
+5. Core Features: Real-time neural threat scanning, stealth app auditing (microphone/camera checks), network anomaly detection, zero-day exploit prevention.
+6. Privacy First: All scanning is done locally on-device or anonymously. User data and browsing logs are NEVER tracked or sold.
 
 COMMUNICATION RULES:
 - Be warm, helpful, professional, and convincing.
 - Provide direct security advice when asked about malware, hack signs, or phone safety.
+- Recommend the Yearly Plan ($89.99/yr) as the best value option for ongoing protection and token availability.
 - Utilize both live frontend website content and uploaded RAG Knowledge Base documents to answer detailed questions accurately.
-- Gently highlight how Unhackme solves user concerns and recommend clicking the "Get Protection" button to purchase lifetime security.
 - ALWAYS respond in plain text ONLY. Do NOT use Markdown formatting, asterisks, bullet points, headers, or bold text.`;
 
   const [systemPrompt, setSystemPrompt] = useState(defaultPrompt);
@@ -46,7 +48,7 @@ COMMUNICATION RULES:
   const [botName, setBotName] = useState('Unhackme Support AI');
   const [welcomeMessage, setWelcomeMessage] = useState('Hi there! 👋 Wondering if your device is secure? Ask me anything or let me help you protect your phone!');
   const [autoOpenDelay, setAutoOpenDelay] = useState(3);
-  const [ctaText, setCtaText] = useState('Get Lifetime Protection ($29.99)');
+  const [ctaText, setCtaText] = useState('Subscribe from $9.99/mo');
 
   // RAG Knowledge Base State
   const [kbDocs, setKbDocs] = useState<KBDocument[]>([]);

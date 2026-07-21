@@ -289,6 +289,35 @@ exports.createCheckoutSession = onCall({
     throw new HttpsError('unauthenticated', 'You must be logged in to make a purchase.');
   }
 
+  const { planId = 'monthly' } = request.data || {};
+
+  // Plan price configs
+  const planConfigs = {
+    'monthly': {
+      name: 'Unhackme Monthly Plan',
+      description: 'Flexible monthly AI protection, threat scanning & app auditing.',
+      unit_amount: 999, // $9.99
+      recurring: { interval: 'month', interval_count: 1 },
+      days: 30
+    },
+    'semi-annual': {
+      name: 'Unhackme Semi-Annual Plan',
+      description: '6 Months of AI updates, protection for up to 3 devices, and 24/7 priority support.',
+      unit_amount: 4999, // $49.99
+      recurring: { interval: 'month', interval_count: 6 },
+      days: 180
+    },
+    'yearly': {
+      name: 'Unhackme Yearly Best Value Plan',
+      description: 'Full 1-Year AI protection, priority neural updates, and VIP 24/7 support.',
+      unit_amount: 8999, // $89.99
+      recurring: { interval: 'year', interval_count: 1 },
+      days: 365
+    }
+  };
+
+  const selectedPlan = planConfigs[planId] || planConfigs['monthly'];
+
   // Security: Validate and restrict redirect origin
   const rawOrigin = request.rawRequest?.headers?.origin;
   const origin = ALLOWED_ORIGINS.includes(rawOrigin) ? rawOrigin : ALLOWED_ORIGINS[0];
@@ -320,16 +349,20 @@ exports.createCheckoutSession = onCall({
           price_data: {
             currency: 'usd',
             product_data: {
-              name: 'Unhackme Lifetime Plan',
-              description: 'Lifetime AI updates, protection for 3 devices, and 24/7 priority support.',
+              name: selectedPlan.name,
+              description: selectedPlan.description,
             },
-            unit_amount: 2999, // $29.99
+            unit_amount: selectedPlan.unit_amount,
+            recurring: selectedPlan.recurring,
           },
           quantity: 1,
         },
       ],
-      mode: 'payment',
-      // Security: tie checkout to the authenticated user
+      mode: 'subscription',
+      metadata: {
+        planId: planId,
+        days: String(selectedPlan.days),
+      },
       client_reference_id: request.auth.uid,
       customer_email: request.auth.token.email || undefined,
       success_url: `${origin}/?success=true`,
@@ -345,9 +378,6 @@ exports.createCheckoutSession = onCall({
 });
 
 // --- Stripe webhook: this is what actually grants the purchase. ---
-// createCheckoutSession only starts a payment; without this handler, a customer
-// pays and nothing in Firestore ever reflects it. Signature-verified using
-// config/payment_provider.stripeWebhookSecret, so only Stripe can trigger it.
 exports.stripeWebhook = onRequest(
   { maxInstances: 10 },
   async (req, res) => {
@@ -381,8 +411,6 @@ exports.stripeWebhook = onRequest(
 
     let event;
     try {
-      // req.rawBody is provided by the Firebase Functions runtime and is required
-      // for Stripe's signature check — a parsed/re-serialized body would fail it.
       event = stripe.webhooks.constructEvent(
         req.rawBody,
         req.headers["stripe-signature"],
@@ -395,18 +423,25 @@ exports.stripeWebhook = onRequest(
     }
 
     try {
-      if (event.type === "checkout.session.completed") {
+      if (event.type === "checkout.session.completed" || event.type === "customer.subscription.created") {
         const session = event.data.object;
         const uid = session.client_reference_id;
 
         if (!uid) {
-          console.error("stripeWebhook: checkout.session.completed with no client_reference_id", session.id);
+          console.error("stripeWebhook: event with no client_reference_id", session.id);
         } else {
-          // Idempotent: re-deliveries of the same event just overwrite the same fields.
+          const planId = session.metadata?.planId || 'monthly';
+          let durationDays = Number(session.metadata?.days || 30);
+          if (planId === 'semi-annual') durationDays = 180;
+          if (planId === 'yearly') durationDays = 365;
+
+          const accessExpiresAtMillis = Date.now() + (durationDays * 24 * 60 * 60 * 1000);
+
           await db.collection("users").doc(uid).set(
             {
               isPaid: true,
-              plan: "lifetime",
+              plan: planId,
+              accessExpiresAtMillis: accessExpiresAtMillis,
               paidAt: FieldValue.serverTimestamp(),
               lastStripeSessionId: session.id,
             },
@@ -417,10 +452,10 @@ exports.stripeWebhook = onRequest(
             uid,
             provider: "stripe",
             sessionId: session.id,
-            amount: session.amount_total,
-            currency: session.currency,
+            amount: session.amount_total || session.unit_amount || 0,
+            currency: session.currency || "usd",
             status: "success",
-            plan: "lifetime",
+            plan: planId,
             createdAt: FieldValue.serverTimestamp(),
           });
         }
@@ -429,7 +464,6 @@ exports.stripeWebhook = onRequest(
       res.status(200).send("ok");
     } catch (err) {
       console.error("stripeWebhook: failed to process event", err);
-      // 500 so Stripe retries — the entitlement write above didn't complete.
       res.status(500).send("Internal error processing webhook");
     }
   }

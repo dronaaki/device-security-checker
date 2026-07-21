@@ -35,10 +35,37 @@ function App() {
     ],
     downloadTitle: 'Available everywhere.',
     downloadSubtitle: 'Download Unhackme for your primary devices today.',
-    pricingTitle: 'One price. Complete security.',
-    pricingSubtitle: 'No subscriptions. No hidden fees. Just peace of mind.',
-    pricingPrice: '$29.99',
-    pricingFeatures: ['Lifetime AI updates', 'Protection for up to 3 devices', 'Priority 24/7 support']
+    pricingTitle: 'Flexible protection plans.',
+    pricingSubtitle: 'Choose the subscription plan that fits your security needs. Cancel anytime.',
+    plans: [
+      {
+        id: 'monthly',
+        name: 'Monthly Plan',
+        price: '$9.99',
+        period: '/month',
+        badge: null,
+        description: 'Flexible monthly security for active device monitoring.',
+        features: ['Real-time AI threat scanning', 'App privacy & permissions audit', 'Protection for up to 3 devices', 'Cancel anytime']
+      },
+      {
+        id: 'semi-annual',
+        name: 'Semi-Annual Plan',
+        price: '$49.99',
+        period: '/6 months',
+        badge: 'Save 16%',
+        description: 'Half-year continuous protection with priority definition updates.',
+        features: ['Everything in Monthly', 'Save 16% off monthly rate', 'Priority AI neural engine access', '24/7 Priority support']
+      },
+      {
+        id: 'yearly',
+        name: 'Yearly Plan',
+        price: '$89.99',
+        period: '/year',
+        badge: 'Best Value • Save 25%',
+        description: 'Complete 1-Year AI security with VIP priority support.',
+        features: ['Everything in Semi-Annual', 'Save 25% off monthly rate ($7.50/mo equivalent)', 'VIP priority support', 'Early access to zero-day definitions']
+      }
+    ]
   });
 
   useEffect(() => {
@@ -73,12 +100,12 @@ function App() {
     }
   };
 
-  const handleCheckout = async () => {
+  const handleCheckout = async (planId: string = 'monthly') => {
     setCheckoutStatus('loading');
     setCheckoutError('');
     try {
       const createCheckoutSession = httpsCallable(functions, 'createCheckoutSession');
-      const result = await createCheckoutSession();
+      const result = await createCheckoutSession({ planId });
       const data = result.data as { url: string };
       
       if (data.url) {
@@ -287,35 +314,95 @@ function App() {
             initial="hidden"
             whileInView="visible"
             viewport={{ once: true }}
-            variants={fadeInUp}
-            className="form-container"
-            style={{ marginTop: '3rem', textAlign: 'center' }}
+            variants={staggerContainer}
+            style={{ 
+              marginTop: '3rem', 
+              display: 'grid', 
+              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', 
+              gap: '2rem',
+              alignItems: 'stretch'
+            }}
           >
-            <h3 style={{ fontSize: '3rem', marginBottom: '1rem' }}>{websiteContent.pricingPrice}<span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>/lifetime</span></h3>
-            
-            <ul style={{ listStyle: 'none', padding: 0, margin: '2rem 0', textAlign: 'left', display: 'inline-block' }}>
-              {websiteContent.pricingFeatures.map((feat, idx) => (
-                <li key={idx} style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <CheckCircle2 color="#06b6d4" size={20} /> {feat}
-                </li>
-              ))}
-            </ul>
+            {(websiteContent.plans || []).map((plan: any) => {
+              const isYearly = plan.id === 'yearly';
+              return (
+                <motion.div 
+                  key={plan.id}
+                  variants={fadeInUp}
+                  className="card"
+                  style={{ 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    justifyContent: 'space-between',
+                    position: 'relative',
+                    background: isYearly ? 'linear-gradient(135deg, rgba(30, 41, 59, 0.9), rgba(15, 23, 42, 0.95))' : 'var(--bg-card)',
+                    border: isYearly ? '2px solid var(--accent-color)' : '1px solid var(--border-color)',
+                    boxShadow: isYearly ? '0 20px 30px -10px rgba(6, 182, 212, 0.25)' : 'none',
+                    padding: '2rem'
+                  }}
+                >
+                  {plan.badge && (
+                    <div style={{
+                      position: 'absolute',
+                      top: '-12px',
+                      right: '20px',
+                      background: 'linear-gradient(135deg, #06b6d4, #3b82f6)',
+                      color: 'white',
+                      fontSize: '0.75rem',
+                      fontWeight: 700,
+                      padding: '4px 12px',
+                      borderRadius: '20px',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.5px',
+                      boxShadow: '0 4px 12px rgba(6, 182, 212, 0.4)'
+                    }}>
+                      {plan.badge}
+                    </div>
+                  )}
 
-            <button 
-              className="btn btn-primary" 
-              style={{ width: '100%', padding: '1rem', fontSize: '1.1rem' }}
-              onClick={handleCheckout}
-              disabled={checkoutStatus === 'loading'}
-            >
-              {checkoutStatus === 'loading' ? 'Initializing Secure Checkout...' : 'Buy Now securely with Stripe'}
-            </button>
-            {checkoutStatus === 'error' && (
-              <p style={{ color: '#ef4444', marginTop: '1rem', fontSize: '0.9rem' }}>
-                Error: {checkoutError}
-              </p>
-            )}
-            <p style={{ fontSize: '0.8rem', marginTop: '1rem' }}>Apple Pay, Google Pay, and standard cards supported during checkout.</p>
+                  <div>
+                    <h3 style={{ fontSize: '1.4rem', marginBottom: '0.5rem', color: 'var(--text-main)' }}>{plan.name}</h3>
+                    <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.5rem', minHeight: '40px' }}>
+                      {plan.description}
+                    </p>
+
+                    <div style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'baseline', gap: '0.25rem' }}>
+                      <span style={{ fontSize: '2.8rem', fontWeight: 800, color: 'var(--text-main)' }}>{plan.price}</span>
+                      <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>{plan.period}</span>
+                    </div>
+
+                    <ul style={{ listStyle: 'none', padding: 0, margin: '1.5rem 0', textAlign: 'left' }}>
+                      {plan.features.map((feat: string, idx: number) => (
+                        <li key={idx} style={{ marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem' }}>
+                          <CheckCircle2 color="#06b6d4" size={18} style={{ flexShrink: 0 }} /> {feat}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <div style={{ marginTop: '1.5rem' }}>
+                    <button 
+                      className={isYearly ? "btn btn-primary" : "btn btn-outline"}
+                      style={{ width: '100%', padding: '0.85rem', fontWeight: 600 }}
+                      onClick={() => handleCheckout(plan.id)}
+                      disabled={checkoutStatus === 'loading'}
+                    >
+                      {checkoutStatus === 'loading' ? 'Initializing...' : `Subscribe - ${plan.price}`}
+                    </button>
+                  </div>
+                </motion.div>
+              );
+            })}
           </motion.div>
+
+          {checkoutStatus === 'error' && (
+            <p style={{ color: '#ef4444', textAlign: 'center', marginTop: '1.5rem', fontSize: '0.9rem' }}>
+              Error: {checkoutError}
+            </p>
+          )}
+          <p style={{ fontSize: '0.8rem', textAlign: 'center', marginTop: '1.5rem', color: 'var(--text-muted)' }}>
+            Apple Pay, Google Pay, and standard credit cards supported. Cancel or manage subscriptions anytime.
+          </p>
         </div>
       </section>
 
