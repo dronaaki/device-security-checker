@@ -1,6 +1,6 @@
 import { SecurityCheckResult } from '../securityChecks';
-import { createConfiguredProvider } from './index';
 import { AIMessage } from './types';
+import { createProviderFromFirestore } from './index';
 
 export interface AIRecommendation {
   id: string;
@@ -79,11 +79,6 @@ export function parseRecommendations(text: string): AIRecommendation[] {
     .slice(0, 5);
 }
 
-/**
- * Generous enough for a local model on modest hardware to finish a short
- * response, but bounded — fetch() has no timeout of its own, so without this a
- * hung provider leaves the caller waiting forever with no way to recover.
- */
 export const DEFAULT_TIMEOUT_MS = 60_000;
 
 export interface AIRecommendationOptions {
@@ -104,7 +99,7 @@ export async function getAIRecommendations(
   signal?.addEventListener('abort', forwardAbort);
 
   try {
-    const provider = createConfiguredProvider();
+    const provider = await createProviderFromFirestore();
     const response = await provider.complete({
       messages: buildMessages(checks),
       signal: controller.signal,

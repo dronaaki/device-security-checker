@@ -1,6 +1,8 @@
 import { createAnthropicProvider } from './providers/anthropic';
 import { createOpenAICompatibleProvider } from './providers/openai-compatible';
 import { AIProvider, AIProviderConfig, AIProviderFactory } from './types';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../firebaseConfig';
 
 export * from './types';
 
@@ -79,6 +81,48 @@ export function createConfiguredProvider(): AIProvider {
   if (provider.requiresApiKey && !config.apiKey && !usingProxy) {
     throw new AIConfigError(
       `${provider.label} needs an API key. Set EXPO_PUBLIC_AI_API_KEY for local testing, or point EXPO_PUBLIC_AI_BASE_URL at a backend that adds it.`
+    );
+  }
+
+  return provider;
+}
+
+/**
+ * Builds the configured provider from Firestore config/ai_provider.
+ */
+export async function createProviderFromFirestore(): Promise<AIProvider> {
+  let id = process.env.EXPO_PUBLIC_AI_PROVIDER ?? 'ollama';
+  let model = process.env.EXPO_PUBLIC_AI_MODEL ?? DEFAULT_MODELS[id];
+  let baseUrl = process.env.EXPO_PUBLIC_AI_BASE_URL || undefined;
+  let apiKey = process.env.EXPO_PUBLIC_AI_API_KEY || undefined;
+
+  try {
+    const configDoc = await getDoc(doc(db, 'config', 'ai_provider'));
+    if (configDoc.exists()) {
+      const data = configDoc.data();
+      if (data.providerId) id = data.providerId;
+      if (data.model) model = data.model;
+      if (data.baseUrl) baseUrl = data.baseUrl;
+      if (data.apiKey) apiKey = data.apiKey;
+    }
+  } catch (error) {
+    console.warn("Could not fetch AI config from Firestore, falling back to env", error);
+  }
+
+  const factory = AI_PROVIDERS[id];
+
+  if (!factory) {
+    throw new AIConfigError(
+      `Unknown AI provider "${id}". Set to one of: ${Object.keys(AI_PROVIDERS).join(', ')}.`
+    );
+  }
+
+  const config: AIProviderConfig = { model, baseUrl, apiKey };
+  const provider = factory(config);
+
+  if (provider.requiresApiKey && !config.apiKey && !config.baseUrl) {
+    throw new AIConfigError(
+      `${provider.label} needs an API key. Please configure it in the Admin Dashboard.`
     );
   }
 

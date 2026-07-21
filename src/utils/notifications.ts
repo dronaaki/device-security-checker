@@ -45,24 +45,42 @@ export async function requestNotificationPermissions() {
   }
 }
 
+import { auth, db } from './firebaseConfig';
+import { doc, collection, setDoc } from 'firebase/firestore';
+
 export async function sendSecurityAlert(title: string, body: string) {
   if (!Notifications) {
     console.log('Security alert (web):', title, '-', body);
-    return;
+  } else {
+    try {
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title,
+          body,
+          data: { type: 'security_alert' },
+        },
+        trigger: null, // Show immediately
+      });
+      console.log('Security notification sent:', title);
+    } catch (error) {
+      console.error('Error sending notification:', error);
+    }
   }
 
-  try {
-    await Notifications.scheduleNotificationAsync({
-      content: {
+  // Sync to Firestore
+  if (auth?.currentUser) {
+    try {
+      const notifId = new Date().getTime().toString() + Math.random().toString(36).substring(7);
+      const notifRef = doc(collection(db, 'users', auth.currentUser.uid, 'notifications'), notifId);
+      await setDoc(notifRef, {
+        id: notifId,
         title,
         body,
-        data: { type: 'security_alert' },
-      },
-      trigger: null, // Show immediately
-    });
-    console.log('Security notification sent:', title);
-  } catch (error) {
-    console.error('Error sending notification:', error);
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error('Error syncing notification:', error);
+    }
   }
 }
 

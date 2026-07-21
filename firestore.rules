@@ -1,0 +1,57 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Check if user is the Superadmin
+    function isSuperadmin() {
+      return request.auth != null && request.auth.token.email == 'mosaicmusic02@gmail.com';
+    }
+
+    // Check if user is a valid active admin
+    function isActiveAdmin() {
+      return request.auth != null &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true &&
+             (
+               !('accessExpiresAtMillis' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data) || 
+               request.time.toMillis() < get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accessExpiresAtMillis
+             );
+    }
+
+    // Check if user is deleted
+    function isNotDeleted(userId) {
+      return request.auth != null && request.auth.uid == userId &&
+             (!exists(/databases/$(database)/documents/users/$(userId)) || 
+              !('isDeleted' in get(/databases/$(database)/documents/users/$(userId)).data) || 
+              get(/databases/$(database)/documents/users/$(userId)).data.isDeleted == false);
+    }
+
+    // Users collection: users can read their own doc.
+    // Superadmin can read/write all. Admins can read all.
+    match /users/{userId} {
+      allow read: if request.auth != null && (request.auth.uid == userId || isSuperadmin() || isActiveAdmin());
+      allow write: if request.auth != null && (
+        (request.auth.uid == userId && isNotDeleted(userId) && (resource == null || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['isAdmin', 'role', 'accessExpiresAtMillis', 'isDeleted']))) 
+        || isSuperadmin()
+      );
+
+      match /securityLogs/{logId} {
+        allow read, write: if request.auth != null && ((request.auth.uid == userId && isNotDeleted(userId)) || isSuperadmin());
+      }
+      match /notifications/{notifId} {
+        allow read, write: if request.auth != null && ((request.auth.uid == userId && isNotDeleted(userId)) || isSuperadmin());
+      }
+      match /ai_conversations/{msgId} {
+        allow read, write: if request.auth != null && ((request.auth.uid == userId && isNotDeleted(userId)) || isSuperadmin());
+      }
+      match /actions/{actionId} {
+        allow read, write: if request.auth != null && ((request.auth.uid == userId && isNotDeleted(userId)) || isSuperadmin());
+      }
+    }
+
+    // Config collection: Superadmin and Active Admins can read and write AI provider config
+    match /config/{document=**} {
+      allow read, write: if isSuperadmin() || (isActiveAdmin() && isNotDeleted(request.auth.uid));
+    }
+  }
+}

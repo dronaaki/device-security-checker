@@ -16,6 +16,9 @@ export interface SecurityLog {
   };
 }
 
+import { auth, db } from './firebaseConfig';
+import { doc, collection, setDoc } from 'firebase/firestore';
+
 export async function saveSecurityLog(log: SecurityLog): Promise<void> {
   try {
     const existingLogs = await getSecurityLogs();
@@ -31,6 +34,25 @@ export async function saveSecurityLog(log: SecurityLog): Promise<void> {
     })));
     
     await storage.setItem(LOGS_KEY, logsJson);
+
+    // Sync to Firestore if authenticated
+    if (auth.currentUser) {
+      const logRef = doc(collection(db, 'users', auth.currentUser.uid, 'securityLogs'), log.id);
+      await setDoc(logRef, {
+        id: log.id,
+        timestamp: log.timestamp.toISOString(),
+        overallStatus: log.overallStatus,
+        deviceInfo: log.deviceInfo,
+        checks: log.checks.map(c => ({
+          id: c.id,
+          name: c.name,
+          status: c.status,
+          message: c.message,
+          timestamp: c.timestamp.toISOString()
+        }))
+      });
+    }
+
   } catch (error) {
     console.error('Error saving security log:', error);
   }
