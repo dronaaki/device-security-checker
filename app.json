@@ -8,7 +8,15 @@
     "scheme": "devicesecuritychecker",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/images/icon.png",
+      "bundleIdentifier": "com.anonymous.devicesecuritychecker",
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Unhackme audits app camera permissions to detect unauthorized background spying.",
+        "NSMicrophoneUsageDescription": "Unhackme audits app microphone permissions to protect your privacy from stealth audio recorders.",
+        "NSFaceIDUsageDescription": "Unhackme uses Face ID / Touch ID to securely protect access to your device security logs.",
+        "NSLocationWhenInUseUsageDescription": "Unhackme audits location tracking permissions requested by installed apps."
+      }
     },
     "android": {
       "adaptiveIcon": {
