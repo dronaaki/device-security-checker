@@ -60,5 +60,11 @@ service cloud.firestore {
       allow create: if request.auth != null;
       allow read, delete: if isSuperadmin() || isActiveAdmin();
     }
+
+    // Transactions collection: Superadmin and Active Admins can read, only Superadmin can write
+    match /transactions/{transactionId} {
+      allow read: if isSuperadmin() || isActiveAdmin();
+      allow write: if isSuperadmin();
+    }
   }
 }

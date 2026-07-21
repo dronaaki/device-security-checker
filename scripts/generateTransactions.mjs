@@ -1,4 +1,5 @@
 import { initializeApp } from "firebase/app";
+import { getAuth, signInWithEmailAndPassword } from "firebase/auth";
 import { getFirestore, collection, addDoc } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -11,6 +12,7 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
 const db = getFirestore(app);
 
 const PLANS = [
@@ -36,6 +38,15 @@ function weightedRandom(items) {
 }
 
 async function generateTransactions(count = 150) {
+  console.log(`Authenticating...`);
+  try {
+    await signInWithEmailAndPassword(auth, "mosaicmusic02@gmail.com", "Password123!");
+    console.log("Successfully authenticated as superadmin.");
+  } catch (err) {
+    console.error("Failed to authenticate:", err);
+    process.exit(1);
+  }
+
   console.log(`Generating ${count} mock transactions...`);
   
   const now = new Date();

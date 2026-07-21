@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { DollarSign, TrendingUp, Users, AlertTriangle } from 'lucide-react';
-import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
+import { DollarSign, TrendingUp, Users, AlertTriangle, Database } from 'lucide-react';
+import { collection, query, orderBy, limit, getDocs, addDoc } from 'firebase/firestore';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import { db } from '../firebase';
 
@@ -106,6 +106,60 @@ export function AccountingDashboard() {
     setRevenueData(chartData);
   };
 
+  const generateMockTransactions = async () => {
+    setLoading(true);
+    const PLANS = [
+      { id: 'pro', price: 9.99, weight: 0.7 },
+      { id: 'max', price: 19.99, weight: 0.3 }
+    ];
+
+    const PROVIDERS = ['stripe', 'paypal'];
+    const STATUSES = [
+      { status: 'success', weight: 0.85 },
+      { status: 'failed', weight: 0.10 },
+      { status: 'refunded', weight: 0.05 }
+    ];
+
+    function weightedRandom(items: any[]) {
+      const rand = Math.random();
+      let cumulative = 0;
+      for (const item of items) {
+        cumulative += item.weight;
+        if (rand < cumulative) return item;
+      }
+      return items[items.length - 1];
+    }
+
+    const now = new Date();
+    for (let i = 0; i < 150; i++) {
+      const daysAgo = Math.floor(Math.random() * 180);
+      const date = new Date(now.getTime() - (daysAgo * 24 * 60 * 60 * 1000));
+      
+      const plan = weightedRandom(PLANS);
+      const statusObj = weightedRandom(STATUSES);
+      const provider = PROVIDERS[Math.floor(Math.random() * PROVIDERS.length)];
+      
+      const transaction = {
+        userId: `user_mock_${Math.floor(Math.random() * 1000)}`,
+        userEmail: `user${Math.floor(Math.random() * 1000)}@example.com`,
+        amount: plan.price,
+        currency: 'USD',
+        status: statusObj.status,
+        provider: provider,
+        planId: plan.id,
+        timestamp: date.toISOString(),
+        transactionId: `txn_${Math.random().toString(36).substring(2, 15)}`
+      };
+
+      try {
+        await addDoc(collection(db, 'transactions'), transaction);
+      } catch (e) {
+        console.error("Error adding document: ", e);
+      }
+    }
+    window.location.reload();
+  };
+
   if (loading) {
     return <div style={{ textAlign: 'center', padding: '2rem' }}>Loading accounting data...</div>;
   }
@@ -198,7 +252,12 @@ export function AccountingDashboard() {
           <h3 style={{ marginBottom: '1.5rem', color: 'var(--text-main)' }}>Recent Transactions</h3>
           <div style={{ overflowY: 'auto', flex: 1, paddingRight: '0.5rem' }}>
             {transactions.length === 0 ? (
-              <p style={{ color: 'var(--text-muted)' }}>No transactions found.</p>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '1rem' }}>
+                <p style={{ color: 'var(--text-muted)' }}>No transactions found.</p>
+                <button onClick={generateMockTransactions} className="btn">
+                  <Database size={16} /> Generate Mock Transactions
+                </button>
+              </div>
             ) : (
               <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                 {transactions.slice(0, 15).map(txn => (
