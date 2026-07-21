@@ -9,6 +9,7 @@ import { AIIncidentReports } from './AIIncidentReports';
 import { SubscriberList } from './SubscriberList';
 import { PaymentsDashboard } from './PaymentsDashboard';
 import { AccountingDashboard } from './AccountingDashboard';
+import { AdminAssistant } from './AdminAssistant';
 
 export function Dashboard() {
   const [activeTab, setActiveTab] = useState<'general' | 'payments' | 'accounting'>('general');
@@ -594,6 +595,8 @@ CRITICAL RULES YOU MUST STRICTLY FOLLOW:
         timeFilter={timeFilter} 
         setTimeFilter={setTimeFilter} 
       />
+
+      <AdminAssistant subscribers={subscribers} incidents={incidents} />
 
       <div className="dashboard-grid">
         {/* Left Column: AI Config */}
