@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { collection, query, orderBy, getDocs, doc, setDoc } from 'firebase/firestore';
 import { sendPasswordResetEmail } from 'firebase/auth';
-import { ArrowLeft, Trash2, Key, AlertTriangle, MessageSquare, Bell } from 'lucide-react';
+import { ArrowLeft, Trash2, Key, AlertTriangle, MessageSquare, Bell, Download } from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { db, auth } from '../firebase';
 
 export function UserProfileView({ user, onClose, onUserUpdated }: { user: any, onClose: () => void, onUserUpdated: (u: any) => void }) {
@@ -58,6 +60,67 @@ export function UserProfileView({ user, onClose, onUserUpdated }: { user: any, o
     }
   };
 
+  const handleExportPDF = () => {
+    try {
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.width;
+      
+      // Title
+      doc.setFontSize(20);
+      doc.text("Vulnerability Report", pageWidth / 2, 20, { align: "center" });
+      
+      // Basic Info
+      doc.setFontSize(12);
+      doc.text(`User: ${user.email}`, 14, 30);
+      doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 37);
+      
+      let startY = 47;
+      if (user.deviceInfo) {
+        doc.text(`Device: ${user.deviceInfo.deviceName} (${user.deviceInfo.deviceModel})`, 14, startY);
+        doc.text(`OS Version: ${user.deviceInfo.osVersion}`, 14, startY + 7);
+        startY += 17;
+      }
+
+      // Threat History Table
+      if (logs.length > 0) {
+        doc.setFontSize(14);
+        doc.text("Threat History", 14, startY);
+        startY += 5;
+        
+        const tableBody = logs.flatMap(log => {
+          const dateStr = new Date(log.timestamp).toLocaleString();
+          const threats = (log.checks || []).filter((c:any) => c.status !== 'secure');
+          
+          if (threats.length === 0) {
+            return [[dateStr, log.overallStatus.toUpperCase(), "No active threats"]];
+          }
+          
+          return threats.map((c:any, index:number) => [
+            index === 0 ? dateStr : "", 
+            index === 0 ? log.overallStatus.toUpperCase() : "", 
+            `${c.name}: ${c.message}`
+          ]);
+        });
+        
+        autoTable(doc, {
+          startY: startY,
+          head: [['Date', 'Status', 'Findings']],
+          body: tableBody,
+          styles: { fontSize: 10 },
+          headStyles: { fillColor: [99, 102, 241] }, // --accent-color
+          alternateRowStyles: { fillColor: [245, 245, 245] }
+        });
+      } else {
+        doc.text("No threat history found for this user.", 14, startY);
+      }
+      
+      doc.save(`${user.email}_vulnerability_report.pdf`);
+    } catch (err) {
+      console.error("Failed to generate PDF", err);
+      alert("Failed to generate PDF report.");
+    }
+  };
+
   return (
     <div className="animate-in" style={{ paddingBottom: '2rem' }}>
       <button className="btn" onClick={onClose} style={{ marginBottom: '1rem', background: 'transparent', border: '1px solid var(--border-color)' }}>
@@ -70,8 +133,11 @@ export function UserProfileView({ user, onClose, onUserUpdated }: { user: any, o
           <p style={{ margin: 0, color: 'var(--text-muted)' }}>ID: {user.id}</p>
           {user.isDeleted && <span className="badge" style={{ backgroundColor: '#ef4444', marginTop: '0.5rem', display: 'inline-block' }}>Deleted Account</span>}
         </div>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button className="btn" onClick={handlePasswordReset} style={{ background: 'var(--bg-color)', border: '1px solid var(--border-color)' }}>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <button className="btn" onClick={handleExportPDF} style={{ background: 'var(--success-color)' }}>
+            <Download size={16} /> Export PDF Report
+          </button>
+          <button className="btn" onClick={handlePasswordReset} style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-color)', color: 'var(--text-main)' }}>
             <Key size={16} /> Reset Password
           </button>
           <button className="btn" onClick={handleSoftDelete} disabled={user.isDeleted} style={{ background: '#ef4444', borderColor: '#ef4444' }}>

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { collection, doc, getDoc, getDocs, setDoc, addDoc, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
-import { LogOut, Save, Settings, X } from 'lucide-react';
+import { LogOut, Save, Settings, X, Sun, Moon } from 'lucide-react';
 import { auth, db } from '../firebase';
 
 import { UserProfileView } from './UserProfileView';
@@ -43,6 +43,16 @@ CRITICAL RULES YOU MUST STRICTLY FOLLOW:
   const [systemPrompt, setSystemPrompt] = useState(defaultSystemPrompt);
   const [isEditingPrompt, setIsEditingPrompt] = useState(false);
   const [saving, setSaving] = useState(false);
+  
+  // Theme State
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    return (localStorage.getItem('adminTheme') as 'dark' | 'light') || 'dark';
+  });
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('adminTheme', theme);
+  }, [theme]);
   
   // AI Test State
   const [testPrompt, setTestPrompt] = useState('Hello, how can you help me?');
@@ -543,11 +553,21 @@ CRITICAL RULES YOU MUST STRICTLY FOLLOW:
             )}
           </div>
         </div>
-        <div style={{ textAlign: 'right' }}>
-          <p style={{ margin: 0, marginBottom: '0.5rem' }}>Logged in as {auth.currentUser?.email} {isSuperadmin ? '(Superadmin)' : '(Admin)'}</p>
-          <button className="btn" onClick={() => auth.signOut()} style={{ background: 'transparent', border: '1px solid var(--border-color)', padding: '0.5rem 1rem' }}>
-            <LogOut size={16} /> Sign Out
+        <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <button 
+            onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
+            className="btn"
+            style={{ background: 'transparent', border: '1px solid var(--border-color)', padding: '0.5rem', borderRadius: '50%' }}
+            title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
+          >
+            {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
           </button>
+          <div>
+            <p style={{ margin: 0, marginBottom: '0.5rem', fontSize: '0.875rem' }}>Logged in as <br/><strong>{auth.currentUser?.email}</strong> <br/>{isSuperadmin ? '(Superadmin)' : '(Admin)'}</p>
+            <button className="btn" onClick={() => auth.signOut()} style={{ background: 'transparent', border: '1px solid var(--border-color)', padding: '0.5rem 1rem', width: '100%' }}>
+              <LogOut size={16} /> Sign Out
+            </button>
+          </div>
         </div>
       </nav>
 
