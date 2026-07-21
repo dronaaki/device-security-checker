@@ -8,7 +8,7 @@ export function PaymentsDashboard() {
   const [saving, setSaving] = useState(false);
 
   // General Settings
-  const [activeProvider, setActiveProvider] = useState<'stripe' | 'paypal' | 'google_play' | 'apple_store' | 'apple_pay'>('stripe');
+  const [activeProvider, setActiveProvider] = useState<'stripe' | 'paypal' | 'google_play' | 'apple_store' | 'apple_pay' | 'paddle' | 'coinbase'>('stripe');
 
   // Stripe Settings
   const [stripePublishableKey, setStripePublishableKey] = useState('');
@@ -30,6 +30,14 @@ export function PaymentsDashboard() {
 
   // Apple Pay Settings
   const [applePayMerchantId, setApplePayMerchantId] = useState('');
+
+  // Paddle Settings
+  const [paddleVendorId, setPaddleVendorId] = useState('');
+  const [paddleApiKey, setPaddleApiKey] = useState('');
+
+  // Coinbase Commerce Settings
+  const [coinbaseApiKey, setCoinbaseApiKey] = useState('');
+  const [coinbaseWebhookSecret, setCoinbaseWebhookSecret] = useState('');
 
   useEffect(() => {
     async function loadConfig() {
@@ -54,6 +62,12 @@ export function PaymentsDashboard() {
           setAppleStoreSharedSecret(data.appleStoreSharedSecret || '');
 
           setApplePayMerchantId(data.applePayMerchantId || '');
+
+          setPaddleVendorId(data.paddleVendorId || '');
+          setPaddleApiKey(data.paddleApiKey || '');
+
+          setCoinbaseApiKey(data.coinbaseApiKey || '');
+          setCoinbaseWebhookSecret(data.coinbaseWebhookSecret || '');
         }
       } catch (err) {
         console.error("Failed to load payment config", err);
@@ -81,6 +95,10 @@ export function PaymentsDashboard() {
         appleStoreBundleId,
         appleStoreSharedSecret,
         applePayMerchantId,
+        paddleVendorId,
+        paddleApiKey,
+        coinbaseApiKey,
+        coinbaseWebhookSecret,
         updatedAt: new Date().toISOString()
       }, { merge: true });
       alert('Payment configuration saved successfully!');
@@ -120,6 +138,8 @@ export function PaymentsDashboard() {
               <option value="google_play">Google Play Store</option>
               <option value="apple_store">Apple App Store</option>
               <option value="apple_pay">Apple Pay</option>
+              <option value="paddle">Paddle (MoR)</option>
+              <option value="coinbase">Coinbase Commerce (Crypto)</option>
             </select>
           </div>
 
@@ -240,6 +260,50 @@ export function PaymentsDashboard() {
               placeholder="merchant.com.example"
               value={applePayMerchantId}
               onChange={(e) => setApplePayMerchantId(e.target.value)}
+            />
+          </div>
+
+          <div style={{ marginBottom: '2rem', display: activeProvider === 'paddle' ? 'block' : 'none' }}>
+            <h3 style={{ marginBottom: '1rem', color: '#eab308' }}>Paddle Configuration</h3>
+            
+            <label className="input-label">Vendor ID</label>
+            <input 
+              type="text" 
+              className="input-field" 
+              placeholder="e.g., 123456"
+              value={paddleVendorId}
+              onChange={(e) => setPaddleVendorId(e.target.value)}
+            />
+
+            <label className="input-label">API Key</label>
+            <input 
+              type="password" 
+              className="input-field" 
+              placeholder="Enter Paddle API Key"
+              value={paddleApiKey}
+              onChange={(e) => setPaddleApiKey(e.target.value)}
+            />
+          </div>
+
+          <div style={{ marginBottom: '2rem', display: activeProvider === 'coinbase' ? 'block' : 'none' }}>
+            <h3 style={{ marginBottom: '1rem', color: '#06b6d4' }}>Coinbase Commerce Configuration</h3>
+            
+            <label className="input-label">API Key</label>
+            <input 
+              type="password" 
+              className="input-field" 
+              placeholder="Enter Coinbase API Key"
+              value={coinbaseApiKey}
+              onChange={(e) => setCoinbaseApiKey(e.target.value)}
+            />
+
+            <label className="input-label">Webhook Shared Secret</label>
+            <input 
+              type="password" 
+              className="input-field" 
+              placeholder="Enter Webhook Secret"
+              value={coinbaseWebhookSecret}
+              onChange={(e) => setCoinbaseWebhookSecret(e.target.value)}
             />
           </div>
 
